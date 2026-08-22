@@ -14,7 +14,7 @@
 
 - Java version: **25**. Maven property `<java.version>25</java.version>`.
 - Spring Boot parent: **4.1.1**. Verified booting on Java 25 by spike before this plan.
-- Base package: **`com.andi.weather`**. If a different package is preferred, change it once at Task 1 and follow through consistently.
+- Base package: **`com.singapore.weather`**. If a different package is preferred, change it once at Task 1 and follow through consistently.
 - Jackson: Boot 4.1.1 ships Jackson 3 (`tools.jackson.databind` 3.1.5). **Annotations are still `com.fasterxml.jackson.annotation`** — use those imports.
 - Resilience4j: use **core modules only** (`resilience4j-circuitbreaker`, `resilience4j-retry`, `resilience4j-micrometer`, all `2.4.0`). Do **not** add `resilience4j-spring-boot3` — it targets Spring Framework 6 while Boot 4.1.1 ships Spring Framework 7.
 - Response body is **exactly two fields** in this order: `wind_speed`, then `temperature_degrees`. Both are whole numbers.
@@ -30,7 +30,7 @@
 | File | Responsibility |
 | --- | --- |
 | `pom.xml` | Dependencies, Java 25, Boot 4.1.1, plugins |
-| `src/main/java/com/andi/weather/WeatherApplication.java` | Entry point |
+| `src/main/java/com/singapore/weather/WeatherApplication.java` | Entry point |
 | `config/WeatherProperties.java` | Bound `weather.*` configuration |
 | `config/RestClientConfig.java` | One `RestClient` per provider, with timeouts |
 | `config/ResilienceConfig.java` | Circuit breaker and retry registries, metrics binding |
@@ -64,10 +64,10 @@
 **Files:**
 - Delete: `src/Main.java`, `singapore-weather.iml`
 - Create: `pom.xml`, `.mvn/wrapper/maven-wrapper.properties`, `mvnw`, `mvnw.cmd`
-- Create: `src/main/java/com/andi/weather/WeatherApplication.java`
+- Create: `src/main/java/com/singapore/weather/WeatherApplication.java`
 - Create: `src/main/resources/application.yml`
 - Modify: `.gitignore`
-- Test: `src/test/java/com/andi/weather/WeatherApplicationTests.java`
+- Test: `src/test/java/com/singapore/weather/WeatherApplicationTests.java`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -97,7 +97,7 @@ rmdir src 2>/dev/null || true
     <relativePath/>
   </parent>
 
-  <groupId>com.andi</groupId>
+  <groupId>com.singapore</groupId>
   <artifactId>singapore-weather</artifactId>
   <version>1.0.0</version>
   <name>singapore-weather</name>
@@ -173,10 +173,10 @@ Expected: BUILD SUCCESS, and `mvnw`, `mvnw.cmd`, `.mvn/wrapper/maven-wrapper.pro
 
 - [ ] **Step 4: Write the application entry point**
 
-`src/main/java/com/andi/weather/WeatherApplication.java`:
+`src/main/java/com/singapore/weather/WeatherApplication.java`:
 
 ```java
-package com.andi.weather;
+package com.singapore.weather;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -234,10 +234,10 @@ target/
 
 - [ ] **Step 7: Write the context-loads test**
 
-`src/test/java/com/andi/weather/WeatherApplicationTests.java`:
+`src/test/java/com/singapore/weather/WeatherApplicationTests.java`:
 
 ```java
-package com.andi.weather;
+package com.singapore.weather;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -268,9 +268,9 @@ git commit -m "Add Spring Boot 4.1.1 skeleton on Java 25"
 ## Task 2: Configuration properties
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/config/WeatherProperties.java`
+- Create: `src/main/java/com/singapore/weather/config/WeatherProperties.java`
 - Modify: `src/main/resources/application.yml`
-- Test: `src/test/java/com/andi/weather/config/WeatherPropertiesTest.java`
+- Test: `src/test/java/com/singapore/weather/config/WeatherPropertiesTest.java`
 
 **Interfaces:**
 - Consumes: the application from Task 1.
@@ -283,10 +283,10 @@ git commit -m "Add Spring Boot 4.1.1 skeleton on Java 25"
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/config/WeatherPropertiesTest.java`:
+`src/test/java/com/singapore/weather/config/WeatherPropertiesTest.java`:
 
 ```java
-package com.andi.weather.config;
+package com.singapore.weather.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -338,10 +338,10 @@ Expected: FAIL — compilation error, `WeatherProperties` does not exist.
 
 - [ ] **Step 3: Write `WeatherProperties`**
 
-`src/main/java/com/andi/weather/config/WeatherProperties.java`:
+`src/main/java/com/singapore/weather/config/WeatherProperties.java`:
 
 ```java
-package com.andi.weather.config;
+package com.singapore.weather.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -421,7 +421,7 @@ Expected: PASS, `Tests run: 3, Failures: 0, Errors: 0`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pom.xml src/main/java/com/andi/weather/config src/main/resources/application.yml src/test/java/com/andi/weather/config
+git add pom.xml src/main/java/com/singapore/weather/config src/main/resources/application.yml src/test/java/com/singapore/weather/config
 git commit -m "Add bound and validated weather configuration properties"
 ```
 
@@ -430,13 +430,13 @@ git commit -m "Add bound and validated weather configuration properties"
 ## Task 3: Domain model, exceptions and provider contract
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/domain/Weather.java`
-- Create: `src/main/java/com/andi/weather/domain/WeatherProvider.java`
-- Create: `src/main/java/com/andi/weather/domain/ProviderException.java`
-- Create: `src/main/java/com/andi/weather/domain/CityNotFoundException.java`
-- Create: `src/main/java/com/andi/weather/domain/AllProvidersFailedException.java`
-- Create: `src/main/java/com/andi/weather/domain/InvalidCityException.java`
-- Test: `src/test/java/com/andi/weather/domain/WeatherTest.java`
+- Create: `src/main/java/com/singapore/weather/domain/Weather.java`
+- Create: `src/main/java/com/singapore/weather/domain/WeatherProvider.java`
+- Create: `src/main/java/com/singapore/weather/domain/ProviderException.java`
+- Create: `src/main/java/com/singapore/weather/domain/CityNotFoundException.java`
+- Create: `src/main/java/com/singapore/weather/domain/AllProvidersFailedException.java`
+- Create: `src/main/java/com/singapore/weather/domain/InvalidCityException.java`
+- Test: `src/test/java/com/singapore/weather/domain/WeatherTest.java`
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
@@ -448,10 +448,10 @@ git commit -m "Add bound and validated weather configuration properties"
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/domain/WeatherTest.java`:
+`src/test/java/com/singapore/weather/domain/WeatherTest.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 import org.junit.jupiter.api.Test;
 
@@ -489,10 +489,10 @@ Expected: FAIL — compilation error, `Weather` does not exist.
 
 - [ ] **Step 3: Write the domain types**
 
-`src/main/java/com/andi/weather/domain/Weather.java`:
+`src/main/java/com/singapore/weather/domain/Weather.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 /**
  * Provider-agnostic weather reading. Values are unrounded; rounding happens
@@ -508,10 +508,10 @@ public record Weather(double temperatureCelsius, double windSpeedKmh) {
 }
 ```
 
-`src/main/java/com/andi/weather/domain/WeatherProvider.java`:
+`src/main/java/com/singapore/weather/domain/WeatherProvider.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 /**
  * One weather vendor. Implementations translate their vendor's failure
@@ -530,10 +530,10 @@ public interface WeatherProvider {
 }
 ```
 
-`src/main/java/com/andi/weather/domain/ProviderException.java`:
+`src/main/java/com/singapore/weather/domain/ProviderException.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 /** A provider failed for infrastructure reasons. Counts as a circuit breaker failure. */
 public class ProviderException extends RuntimeException {
@@ -548,10 +548,10 @@ public class ProviderException extends RuntimeException {
 }
 ```
 
-`src/main/java/com/andi/weather/domain/CityNotFoundException.java`:
+`src/main/java/com/singapore/weather/domain/CityNotFoundException.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 /**
  * A provider does not recognise the city. This is a client error, not an
@@ -572,10 +572,10 @@ public class CityNotFoundException extends RuntimeException {
 }
 ```
 
-`src/main/java/com/andi/weather/domain/AllProvidersFailedException.java`:
+`src/main/java/com/singapore/weather/domain/AllProvidersFailedException.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 /** Every provider failed. The caller decides whether stale data can be served. */
 public class AllProvidersFailedException extends RuntimeException {
@@ -586,10 +586,10 @@ public class AllProvidersFailedException extends RuntimeException {
 }
 ```
 
-`src/main/java/com/andi/weather/domain/InvalidCityException.java`:
+`src/main/java/com/singapore/weather/domain/InvalidCityException.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 /** The city parameter is malformed and was rejected before any provider was contacted. */
 public class InvalidCityException extends RuntimeException {
@@ -608,7 +608,7 @@ Expected: PASS, `Tests run: 3, Failures: 0, Errors: 0`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/domain src/test/java/com/andi/weather/domain
+git add src/main/java/com/singapore/weather/domain src/test/java/com/singapore/weather/domain
 git commit -m "Add weather domain model, provider contract and exception types"
 ```
 
@@ -617,8 +617,8 @@ git commit -m "Add weather domain model, provider contract and exception types"
 ## Task 4: Provider chain with failover and resilience
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/domain/ProviderChain.java`
-- Test: `src/test/java/com/andi/weather/domain/ProviderChainTest.java`
+- Create: `src/main/java/com/singapore/weather/domain/ProviderChain.java`
+- Test: `src/test/java/com/singapore/weather/domain/ProviderChainTest.java`
 
 **Interfaces:**
 - Consumes: `Weather`, `WeatherProvider`, `ProviderException`, `CityNotFoundException`, `AllProvidersFailedException` from Task 3.
@@ -632,10 +632,10 @@ move the circuit toward opening.
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/domain/ProviderChainTest.java`:
+`src/test/java/com/singapore/weather/domain/ProviderChainTest.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -799,10 +799,10 @@ Expected: FAIL — compilation error, `ProviderChain` does not exist.
 
 - [ ] **Step 3: Write `ProviderChain`**
 
-`src/main/java/com/andi/weather/domain/ProviderChain.java`:
+`src/main/java/com/singapore/weather/domain/ProviderChain.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -878,7 +878,7 @@ Expected: PASS, `Tests run: 6, Failures: 0, Errors: 0`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/domain/ProviderChain.java src/test/java/com/andi/weather/domain/ProviderChainTest.java
+git add src/main/java/com/singapore/weather/domain/ProviderChain.java src/test/java/com/singapore/weather/domain/ProviderChainTest.java
 git commit -m "Add provider chain with circuit-breaker-backed failover"
 ```
 
@@ -887,10 +887,10 @@ git commit -m "Add provider chain with circuit-breaker-backed failover"
 ## Task 5: Cache with soft and hard TTL
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/cache/CachedWeather.java`
-- Create: `src/main/java/com/andi/weather/cache/WeatherCache.java`
-- Test: `src/test/java/com/andi/weather/cache/MutableClock.java`
-- Test: `src/test/java/com/andi/weather/cache/WeatherCacheTest.java`
+- Create: `src/main/java/com/singapore/weather/cache/CachedWeather.java`
+- Create: `src/main/java/com/singapore/weather/cache/WeatherCache.java`
+- Test: `src/test/java/com/singapore/weather/cache/MutableClock.java`
+- Test: `src/test/java/com/singapore/weather/cache/WeatherCacheTest.java`
 
 **Interfaces:**
 - Consumes: `Weather` from Task 3.
@@ -904,10 +904,10 @@ git commit -m "Add provider chain with circuit-breaker-backed failover"
 
 - [ ] **Step 1: Write the controllable clock**
 
-`src/test/java/com/andi/weather/cache/MutableClock.java`:
+`src/test/java/com/singapore/weather/cache/MutableClock.java`:
 
 ```java
-package com.andi.weather.cache;
+package com.singapore.weather.cache;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -952,12 +952,12 @@ public class MutableClock extends Clock {
 
 - [ ] **Step 2: Write the failing test**
 
-`src/test/java/com/andi/weather/cache/WeatherCacheTest.java`:
+`src/test/java/com/singapore/weather/cache/WeatherCacheTest.java`:
 
 ```java
-package com.andi.weather.cache;
+package com.singapore.weather.cache;
 
-import com.andi.weather.domain.Weather;
+import com.singapore.weather.domain.Weather;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -1049,12 +1049,12 @@ Expected: FAIL — compilation error, `WeatherCache` does not exist.
 
 - [ ] **Step 4: Write the cache**
 
-`src/main/java/com/andi/weather/cache/CachedWeather.java`:
+`src/main/java/com/singapore/weather/cache/CachedWeather.java`:
 
 ```java
-package com.andi.weather.cache;
+package com.singapore.weather.cache;
 
-import com.andi.weather.domain.Weather;
+import com.singapore.weather.domain.Weather;
 
 import java.time.Instant;
 
@@ -1062,12 +1062,12 @@ public record CachedWeather(Weather weather, Instant fetchedAt) {
 }
 ```
 
-`src/main/java/com/andi/weather/cache/WeatherCache.java`:
+`src/main/java/com/singapore/weather/cache/WeatherCache.java`:
 
 ```java
-package com.andi.weather.cache;
+package com.singapore.weather.cache;
 
-import com.andi.weather.domain.Weather;
+import com.singapore.weather.domain.Weather;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
@@ -1130,7 +1130,7 @@ Expected: PASS, `Tests run: 7, Failures: 0, Errors: 0`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/cache src/test/java/com/andi/weather/cache
+git add src/main/java/com/singapore/weather/cache src/test/java/com/singapore/weather/cache
 git commit -m "Add Caffeine cache with 3s soft TTL over 24h stale retention"
 ```
 
@@ -1139,8 +1139,8 @@ git commit -m "Add Caffeine cache with 3s soft TTL over 24h stale retention"
 ## Task 6: Stampede protection with striped locks
 
 **Files:**
-- Modify: `src/main/java/com/andi/weather/cache/WeatherCache.java`
-- Test: `src/test/java/com/andi/weather/cache/WeatherCacheStampedeTest.java`
+- Modify: `src/main/java/com/singapore/weather/cache/WeatherCache.java`
+- Test: `src/test/java/com/singapore/weather/cache/WeatherCacheStampedeTest.java`
 
 **Interfaces:**
 - Consumes: `WeatherCache` from Task 5.
@@ -1150,12 +1150,12 @@ git commit -m "Add Caffeine cache with 3s soft TTL over 24h stale retention"
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/cache/WeatherCacheStampedeTest.java`:
+`src/test/java/com/singapore/weather/cache/WeatherCacheStampedeTest.java`:
 
 ```java
-package com.andi.weather.cache;
+package com.singapore.weather.cache;
 
-import com.andi.weather.domain.Weather;
+import com.singapore.weather.domain.Weather;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -1318,7 +1318,7 @@ Expected: PASS, 10 tests total.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/cache/WeatherCache.java src/test/java/com/andi/weather/cache/WeatherCacheStampedeTest.java
+git add src/main/java/com/singapore/weather/cache/WeatherCache.java src/test/java/com/singapore/weather/cache/WeatherCacheStampedeTest.java
 git commit -m "Add striped-lock stampede protection to the weather cache"
 ```
 
@@ -1327,10 +1327,10 @@ git commit -m "Add striped-lock stampede protection to the weather cache"
 ## Task 7: Weather service orchestration
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/domain/WeatherResult.java`
-- Create: `src/main/java/com/andi/weather/domain/WeatherService.java`
-- Create: `src/main/java/com/andi/weather/domain/WeatherServiceImpl.java`
-- Test: `src/test/java/com/andi/weather/domain/WeatherServiceImplTest.java`
+- Create: `src/main/java/com/singapore/weather/domain/WeatherResult.java`
+- Create: `src/main/java/com/singapore/weather/domain/WeatherService.java`
+- Create: `src/main/java/com/singapore/weather/domain/WeatherServiceImpl.java`
+- Test: `src/test/java/com/singapore/weather/domain/WeatherServiceImplTest.java`
 
 **Interfaces:**
 - Consumes: `WeatherCache` (Tasks 5–6), `ProviderChain` (Task 4), `Weather` (Task 3).
@@ -1348,13 +1348,13 @@ git commit -m "Add striped-lock stampede protection to the weather cache"
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/domain/WeatherServiceImplTest.java`:
+`src/test/java/com/singapore/weather/domain/WeatherServiceImplTest.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
-import com.andi.weather.cache.MutableClock;
-import com.andi.weather.cache.WeatherCache;
+import com.singapore.weather.cache.MutableClock;
+import com.singapore.weather.cache.WeatherCache;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.RetryConfig;
@@ -1506,10 +1506,10 @@ Expected: FAIL — compilation error, `WeatherServiceImpl` does not exist.
 
 - [ ] **Step 3: Write the service**
 
-`src/main/java/com/andi/weather/domain/WeatherResult.java`:
+`src/main/java/com/singapore/weather/domain/WeatherResult.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 import java.time.Duration;
 
@@ -1526,10 +1526,10 @@ public record WeatherResult(Weather weather, boolean stale, Duration age) {
 }
 ```
 
-`src/main/java/com/andi/weather/domain/WeatherService.java`:
+`src/main/java/com/singapore/weather/domain/WeatherService.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
 public interface WeatherService {
 
@@ -1542,13 +1542,13 @@ public interface WeatherService {
 }
 ```
 
-`src/main/java/com/andi/weather/domain/WeatherServiceImpl.java`:
+`src/main/java/com/singapore/weather/domain/WeatherServiceImpl.java`:
 
 ```java
-package com.andi.weather.domain;
+package com.singapore.weather.domain;
 
-import com.andi.weather.cache.CachedWeather;
-import com.andi.weather.cache.WeatherCache;
+import com.singapore.weather.cache.CachedWeather;
+import com.singapore.weather.cache.WeatherCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -1608,7 +1608,7 @@ Expected: PASS, `Tests run: 7, Failures: 0, Errors: 0`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/domain src/test/java/com/andi/weather/domain/WeatherServiceImplTest.java
+git add src/main/java/com/singapore/weather/domain src/test/java/com/singapore/weather/domain/WeatherServiceImplTest.java
 git commit -m "Add weather service orchestrating cache, failover and stale serving"
 ```
 
@@ -1617,9 +1617,9 @@ git commit -m "Add weather service orchestrating cache, failover and stale servi
 ## Task 8: Weatherstack provider
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/provider/weatherstack/WeatherstackResponse.java`
-- Create: `src/main/java/com/andi/weather/provider/weatherstack/WeatherstackProvider.java`
-- Test: `src/test/java/com/andi/weather/provider/weatherstack/WeatherstackProviderTest.java`
+- Create: `src/main/java/com/singapore/weather/provider/weatherstack/WeatherstackResponse.java`
+- Create: `src/main/java/com/singapore/weather/provider/weatherstack/WeatherstackProvider.java`
+- Test: `src/test/java/com/singapore/weather/provider/weatherstack/WeatherstackProviderTest.java`
 
 **Interfaces:**
 - Consumes: `Weather`, `WeatherProvider`, `ProviderException`, `CityNotFoundException` (Task 3).
@@ -1632,14 +1632,14 @@ signal stays green.
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/provider/weatherstack/WeatherstackProviderTest.java`:
+`src/test/java/com/singapore/weather/provider/weatherstack/WeatherstackProviderTest.java`:
 
 ```java
-package com.andi.weather.provider.weatherstack;
+package com.singapore.weather.provider.weatherstack;
 
-import com.andi.weather.domain.CityNotFoundException;
-import com.andi.weather.domain.ProviderException;
-import com.andi.weather.domain.Weather;
+import com.singapore.weather.domain.CityNotFoundException;
+import com.singapore.weather.domain.ProviderException;
+import com.singapore.weather.domain.Weather;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -1765,10 +1765,10 @@ Expected: FAIL — compilation error, `WeatherstackProvider` does not exist.
 
 - [ ] **Step 3: Write the DTO**
 
-`src/main/java/com/andi/weather/provider/weatherstack/WeatherstackResponse.java`:
+`src/main/java/com/singapore/weather/provider/weatherstack/WeatherstackResponse.java`:
 
 ```java
-package com.andi.weather.provider.weatherstack;
+package com.singapore.weather.provider.weatherstack;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -1795,15 +1795,15 @@ public record WeatherstackResponse(Boolean success, Error error, Current current
 
 - [ ] **Step 4: Write the provider**
 
-`src/main/java/com/andi/weather/provider/weatherstack/WeatherstackProvider.java`:
+`src/main/java/com/singapore/weather/provider/weatherstack/WeatherstackProvider.java`:
 
 ```java
-package com.andi.weather.provider.weatherstack;
+package com.singapore.weather.provider.weatherstack;
 
-import com.andi.weather.domain.CityNotFoundException;
-import com.andi.weather.domain.ProviderException;
-import com.andi.weather.domain.Weather;
-import com.andi.weather.domain.WeatherProvider;
+import com.singapore.weather.domain.CityNotFoundException;
+import com.singapore.weather.domain.ProviderException;
+import com.singapore.weather.domain.Weather;
+import com.singapore.weather.domain.WeatherProvider;
 import org.springframework.web.client.RestClient;
 
 import java.util.Set;
@@ -1893,7 +1893,7 @@ Expected: PASS, `Tests run: 7, Failures: 0, Errors: 0`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/provider/weatherstack src/test/java/com/andi/weather/provider/weatherstack
+git add src/main/java/com/singapore/weather/provider/weatherstack src/test/java/com/singapore/weather/provider/weatherstack
 git commit -m "Add Weatherstack provider honouring the success flag"
 ```
 
@@ -1902,9 +1902,9 @@ git commit -m "Add Weatherstack provider honouring the success flag"
 ## Task 9: OpenWeatherMap provider
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/provider/openweathermap/OpenWeatherMapResponse.java`
-- Create: `src/main/java/com/andi/weather/provider/openweathermap/OpenWeatherMapProvider.java`
-- Test: `src/test/java/com/andi/weather/provider/openweathermap/OpenWeatherMapProviderTest.java`
+- Create: `src/main/java/com/singapore/weather/provider/openweathermap/OpenWeatherMapResponse.java`
+- Create: `src/main/java/com/singapore/weather/provider/openweathermap/OpenWeatherMapProvider.java`
+- Test: `src/test/java/com/singapore/weather/provider/openweathermap/OpenWeatherMapProviderTest.java`
 
 **Interfaces:**
 - Consumes: `Weather`, `WeatherProvider`, `ProviderException`, `CityNotFoundException` (Task 3); `Weather.ofMetresPerSecond` for the unit conversion.
@@ -1916,14 +1916,14 @@ ever sees km/h.
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/provider/openweathermap/OpenWeatherMapProviderTest.java`:
+`src/test/java/com/singapore/weather/provider/openweathermap/OpenWeatherMapProviderTest.java`:
 
 ```java
-package com.andi.weather.provider.openweathermap;
+package com.singapore.weather.provider.openweathermap;
 
-import com.andi.weather.domain.CityNotFoundException;
-import com.andi.weather.domain.ProviderException;
-import com.andi.weather.domain.Weather;
+import com.singapore.weather.domain.CityNotFoundException;
+import com.singapore.weather.domain.ProviderException;
+import com.singapore.weather.domain.Weather;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -2046,10 +2046,10 @@ Expected: FAIL — compilation error, `OpenWeatherMapProvider` does not exist.
 
 - [ ] **Step 3: Write the DTO**
 
-`src/main/java/com/andi/weather/provider/openweathermap/OpenWeatherMapResponse.java`:
+`src/main/java/com/singapore/weather/provider/openweathermap/OpenWeatherMapResponse.java`:
 
 ```java
-package com.andi.weather.provider.openweathermap;
+package com.singapore.weather.provider.openweathermap;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -2068,15 +2068,15 @@ public record OpenWeatherMapResponse(Main main, Wind wind) {
 
 - [ ] **Step 4: Write the provider**
 
-`src/main/java/com/andi/weather/provider/openweathermap/OpenWeatherMapProvider.java`:
+`src/main/java/com/singapore/weather/provider/openweathermap/OpenWeatherMapProvider.java`:
 
 ```java
-package com.andi.weather.provider.openweathermap;
+package com.singapore.weather.provider.openweathermap;
 
-import com.andi.weather.domain.CityNotFoundException;
-import com.andi.weather.domain.ProviderException;
-import com.andi.weather.domain.Weather;
-import com.andi.weather.domain.WeatherProvider;
+import com.singapore.weather.domain.CityNotFoundException;
+import com.singapore.weather.domain.ProviderException;
+import com.singapore.weather.domain.Weather;
+import com.singapore.weather.domain.WeatherProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.RestClient;
 
@@ -2150,7 +2150,7 @@ Expected: PASS, `Tests run: 7, Failures: 0, Errors: 0`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/provider/openweathermap src/test/java/com/andi/weather/provider/openweathermap
+git add src/main/java/com/singapore/weather/provider/openweathermap src/test/java/com/singapore/weather/provider/openweathermap
 git commit -m "Add OpenWeatherMap provider with m/s to km/h conversion"
 ```
 
@@ -2159,12 +2159,12 @@ git commit -m "Add OpenWeatherMap provider with m/s to km/h conversion"
 ## Task 10: HTTP API layer
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/api/CityValidator.java`
-- Create: `src/main/java/com/andi/weather/api/WeatherResponse.java`
-- Create: `src/main/java/com/andi/weather/api/WeatherController.java`
-- Create: `src/main/java/com/andi/weather/api/GlobalExceptionHandler.java`
-- Test: `src/test/java/com/andi/weather/api/CityValidatorTest.java`
-- Test: `src/test/java/com/andi/weather/api/WeatherControllerTest.java`
+- Create: `src/main/java/com/singapore/weather/api/CityValidator.java`
+- Create: `src/main/java/com/singapore/weather/api/WeatherResponse.java`
+- Create: `src/main/java/com/singapore/weather/api/WeatherController.java`
+- Create: `src/main/java/com/singapore/weather/api/GlobalExceptionHandler.java`
+- Test: `src/test/java/com/singapore/weather/api/CityValidatorTest.java`
+- Test: `src/test/java/com/singapore/weather/api/WeatherControllerTest.java`
 
 **Interfaces:**
 - Consumes: `WeatherService`, `WeatherResult`, `Weather`, `CityNotFoundException`, `AllProvidersFailedException`, `InvalidCityException`.
@@ -2175,12 +2175,12 @@ git commit -m "Add OpenWeatherMap provider with m/s to km/h conversion"
 
 - [ ] **Step 1: Write the failing validator test**
 
-`src/test/java/com/andi/weather/api/CityValidatorTest.java`:
+`src/test/java/com/singapore/weather/api/CityValidatorTest.java`:
 
 ```java
-package com.andi.weather.api;
+package com.singapore.weather.api;
 
-import com.andi.weather.domain.InvalidCityException;
+import com.singapore.weather.domain.InvalidCityException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -2233,12 +2233,12 @@ Expected: FAIL — compilation error, `CityValidator` does not exist.
 
 - [ ] **Step 3: Write the validator**
 
-`src/main/java/com/andi/weather/api/CityValidator.java`:
+`src/main/java/com/singapore/weather/api/CityValidator.java`:
 
 ```java
-package com.andi.weather.api;
+package com.singapore.weather.api;
 
-import com.andi.weather.domain.InvalidCityException;
+import com.singapore.weather.domain.InvalidCityException;
 
 import java.util.regex.Pattern;
 
@@ -2282,16 +2282,16 @@ Expected: PASS, `Tests run: 5, Failures: 0, Errors: 0`.
 
 - [ ] **Step 5: Write the failing controller test**
 
-`src/test/java/com/andi/weather/api/WeatherControllerTest.java`:
+`src/test/java/com/singapore/weather/api/WeatherControllerTest.java`:
 
 ```java
-package com.andi.weather.api;
+package com.singapore.weather.api;
 
-import com.andi.weather.domain.AllProvidersFailedException;
-import com.andi.weather.domain.CityNotFoundException;
-import com.andi.weather.domain.Weather;
-import com.andi.weather.domain.WeatherResult;
-import com.andi.weather.domain.WeatherService;
+import com.singapore.weather.domain.AllProvidersFailedException;
+import com.singapore.weather.domain.CityNotFoundException;
+import com.singapore.weather.domain.Weather;
+import com.singapore.weather.domain.WeatherResult;
+import com.singapore.weather.domain.WeatherService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -2405,12 +2405,12 @@ Expected: FAIL — compilation error, `WeatherController` does not exist.
 
 - [ ] **Step 7: Write the response record**
 
-`src/main/java/com/andi/weather/api/WeatherResponse.java`:
+`src/main/java/com/singapore/weather/api/WeatherResponse.java`:
 
 ```java
-package com.andi.weather.api;
+package com.singapore.weather.api;
 
-import com.andi.weather.domain.Weather;
+import com.singapore.weather.domain.Weather;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -2434,13 +2434,13 @@ public record WeatherResponse(
 
 - [ ] **Step 8: Write the controller**
 
-`src/main/java/com/andi/weather/api/WeatherController.java`:
+`src/main/java/com/singapore/weather/api/WeatherController.java`:
 
 ```java
-package com.andi.weather.api;
+package com.singapore.weather.api;
 
-import com.andi.weather.domain.WeatherResult;
-import com.andi.weather.domain.WeatherService;
+import com.singapore.weather.domain.WeatherResult;
+import com.singapore.weather.domain.WeatherService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -2474,14 +2474,14 @@ public class WeatherController {
 
 - [ ] **Step 9: Write the exception handler**
 
-`src/main/java/com/andi/weather/api/GlobalExceptionHandler.java`:
+`src/main/java/com/singapore/weather/api/GlobalExceptionHandler.java`:
 
 ```java
-package com.andi.weather.api;
+package com.singapore.weather.api;
 
-import com.andi.weather.domain.AllProvidersFailedException;
-import com.andi.weather.domain.CityNotFoundException;
-import com.andi.weather.domain.InvalidCityException;
+import com.singapore.weather.domain.AllProvidersFailedException;
+import com.singapore.weather.domain.CityNotFoundException;
+import com.singapore.weather.domain.InvalidCityException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -2522,7 +2522,7 @@ Expected: PASS, `Tests run: 7, Failures: 0, Errors: 0`.
 - [ ] **Step 11: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/api src/test/java/com/andi/weather/api
+git add src/main/java/com/singapore/weather/api src/test/java/com/singapore/weather/api
 git commit -m "Add weather endpoint, response contract and problem responses"
 ```
 
@@ -2531,12 +2531,12 @@ git commit -m "Add weather endpoint, response contract and problem responses"
 ## Task 11: Spring wiring
 
 **Files:**
-- Create: `src/main/java/com/andi/weather/config/RestClientConfig.java`
-- Create: `src/main/java/com/andi/weather/config/ResilienceConfig.java`
-- Create: `src/main/java/com/andi/weather/config/ProviderConfig.java`
-- Create: `src/main/java/com/andi/weather/config/CacheConfig.java`
-- Create: `src/main/java/com/andi/weather/health/ProviderHealthIndicator.java`
-- Test: `src/test/java/com/andi/weather/config/ProviderConfigTest.java`
+- Create: `src/main/java/com/singapore/weather/config/RestClientConfig.java`
+- Create: `src/main/java/com/singapore/weather/config/ResilienceConfig.java`
+- Create: `src/main/java/com/singapore/weather/config/ProviderConfig.java`
+- Create: `src/main/java/com/singapore/weather/config/CacheConfig.java`
+- Create: `src/main/java/com/singapore/weather/health/ProviderHealthIndicator.java`
+- Test: `src/test/java/com/singapore/weather/config/ProviderConfigTest.java`
 
 **Interfaces:**
 - Consumes: everything from Tasks 2–10.
@@ -2544,12 +2544,12 @@ git commit -m "Add weather endpoint, response contract and problem responses"
 
 - [ ] **Step 1: Write the failing test**
 
-`src/test/java/com/andi/weather/config/ProviderConfigTest.java`:
+`src/test/java/com/singapore/weather/config/ProviderConfigTest.java`:
 
 ```java
-package com.andi.weather.config;
+package com.singapore.weather.config;
 
-import com.andi.weather.domain.WeatherProvider;
+import com.singapore.weather.domain.WeatherProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -2605,10 +2605,10 @@ Expected: FAIL — no `WeatherProvider` beans exist.
 
 - [ ] **Step 3: Write `RestClientConfig`**
 
-`src/main/java/com/andi/weather/config/RestClientConfig.java`:
+`src/main/java/com/singapore/weather/config/RestClientConfig.java`:
 
 ```java
-package com.andi.weather.config;
+package com.singapore.weather.config;
 
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
@@ -2633,12 +2633,12 @@ public final class RestClientConfig {
 
 - [ ] **Step 4: Write `ResilienceConfig`**
 
-`src/main/java/com/andi/weather/config/ResilienceConfig.java`:
+`src/main/java/com/singapore/weather/config/ResilienceConfig.java`:
 
 ```java
-package com.andi.weather.config;
+package com.singapore.weather.config;
 
-import com.andi.weather.domain.CityNotFoundException;
+import com.singapore.weather.domain.CityNotFoundException;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
@@ -2694,12 +2694,12 @@ public class ResilienceConfig {
 
 - [ ] **Step 5: Write `CacheConfig`**
 
-`src/main/java/com/andi/weather/config/CacheConfig.java`:
+`src/main/java/com/singapore/weather/config/CacheConfig.java`:
 
 ```java
-package com.andi.weather.config;
+package com.singapore.weather.config;
 
-import com.andi.weather.cache.WeatherCache;
+import com.singapore.weather.cache.WeatherCache;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import org.springframework.beans.factory.InitializingBean;
@@ -2736,15 +2736,15 @@ public class CacheConfig {
 
 - [ ] **Step 6: Write `ProviderConfig`**
 
-`src/main/java/com/andi/weather/config/ProviderConfig.java`:
+`src/main/java/com/singapore/weather/config/ProviderConfig.java`:
 
 ```java
-package com.andi.weather.config;
+package com.singapore.weather.config;
 
-import com.andi.weather.domain.ProviderChain;
-import com.andi.weather.domain.WeatherProvider;
-import com.andi.weather.provider.openweathermap.OpenWeatherMapProvider;
-import com.andi.weather.provider.weatherstack.WeatherstackProvider;
+import com.singapore.weather.domain.ProviderChain;
+import com.singapore.weather.domain.WeatherProvider;
+import com.singapore.weather.provider.openweathermap.OpenWeatherMapProvider;
+import com.singapore.weather.provider.weatherstack.WeatherstackProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.RetryRegistry;
 import org.slf4j.Logger;
@@ -2800,12 +2800,12 @@ public class ProviderConfig {
 
 - [ ] **Step 7: Write the health indicator**
 
-`src/main/java/com/andi/weather/health/ProviderHealthIndicator.java`:
+`src/main/java/com/singapore/weather/health/ProviderHealthIndicator.java`:
 
 ```java
-package com.andi.weather.health;
+package com.singapore.weather.health;
 
-import com.andi.weather.domain.WeatherProvider;
+import com.singapore.weather.domain.WeatherProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.boot.health.contributor.Health;
@@ -2859,7 +2859,7 @@ Expected: BUILD SUCCESS, all tests from Tasks 1–11 pass.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add src/main/java/com/andi/weather/config src/main/java/com/andi/weather/health src/test/java/com/andi/weather/config
+git add src/main/java/com/singapore/weather/config src/main/java/com/singapore/weather/health src/test/java/com/singapore/weather/config
 git commit -m "Wire providers, cache, resilience registries and health indicator"
 ```
 
@@ -2869,8 +2869,8 @@ git commit -m "Wire providers, cache, resilience registries and health indicator
 
 **Files:**
 - Create: `src/test/resources/application-test.yml`
-- Test: `src/test/java/com/andi/weather/FailoverIntegrationTest.java`
-- Test: `src/test/java/com/andi/weather/StaleAfterTotalOutageTest.java`
+- Test: `src/test/java/com/singapore/weather/FailoverIntegrationTest.java`
+- Test: `src/test/java/com/singapore/weather/StaleAfterTotalOutageTest.java`
 
 **Interfaces:**
 - Consumes: the fully wired application from Task 11.
@@ -2895,10 +2895,10 @@ weather:
 
 - [ ] **Step 2: Write the failover test**
 
-`src/test/java/com/andi/weather/FailoverIntegrationTest.java`:
+`src/test/java/com/singapore/weather/FailoverIntegrationTest.java`:
 
 ```java
-package com.andi.weather;
+package com.singapore.weather;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -2983,10 +2983,10 @@ class FailoverIntegrationTest {
 
 - [ ] **Step 3: Write the stale-serving test**
 
-`src/test/java/com/andi/weather/StaleAfterTotalOutageTest.java`:
+`src/test/java/com/singapore/weather/StaleAfterTotalOutageTest.java`:
 
 ```java
-package com.andi.weather;
+package com.singapore.weather;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;

@@ -101,7 +101,7 @@ GET /v1/weather?city=singapore
                                               --no---> 503
 ```
 
-### Package layout (`com.andi.weather`)
+### Package layout (`com.singapore.weather`)
 
 | Package | Contents | Responsibility |
 | --- | --- | --- |
