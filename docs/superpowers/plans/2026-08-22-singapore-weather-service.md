@@ -147,6 +147,13 @@ rmdir src 2>/dev/null || true
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Boot 4 moved @WebMvcTest out of spring-boot-test-autoconfigure into
+         its own module; the starter alone no longer provides it. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.wiremock</groupId>
       <artifactId>wiremock-standalone</artifactId>
@@ -2413,6 +2420,12 @@ git commit -m "Add OpenWeatherMap provider with m/s to km/h conversion"
   - `CityValidator.normalise(String raw) -> String` — trims, lowercases, defaults blank/null to `"singapore"`, throws `InvalidCityException` when malformed.
   - `WeatherResponse.from(Weather) -> WeatherResponse` — rounds to whole numbers.
   - `GET /v1/weather` returning the two-field body, plus `X-Weather-Stale` and `Age` headers when stale.
+
+> **Ordering note.** `WeatherController` is a `@RestController`, so once it exists the
+> component scan requires a `WeatherService` bean — which Task 11 registers. Between this
+> task's commit and Task 11's, the two full-context tests (`WeatherApplicationTests`,
+> `WeatherPropertiesTest`) fail to load their context. That is expected and closed by the
+> very next task; do not add stereotype annotations here to paper over it.
 
 - [ ] **Step 1: Write the failing validator test**
 
