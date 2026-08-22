@@ -1210,8 +1210,15 @@ class WeatherCacheStampedeTest {
         }
 
         startLine.countDown();
-        // Let the losers pile up against the held lock, then release the winner.
-        while (skipped.get() < threads - 1 && refreshes.get() == 0) {
+        // Wait for the winner to take the lock, then let every loser pile up
+        // against it before releasing the winner. A one-phase spin that stops
+        // as soon as refreshes > 0 can race ahead of the 200 virtual threads
+        // still waiting for a carrier thread, letting some of them acquire the
+        // now-free lock after the winner finishes.
+        while (refreshes.get() == 0) {
+            Thread.onSpinWait();
+        }
+        while (skipped.get() < threads - 1) {
             Thread.onSpinWait();
         }
         insideRefresh.countDown();
