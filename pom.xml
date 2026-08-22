@@ -80,6 +80,28 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <includes>
+            <!-- Restores Surefire's own defaults, plus a pattern for the
+                 static nested @SpringBootTest scenarios in ProviderConfigTest,
+                 which the default patterns do not reach. -->
+            <include>**/Test*.java</include>
+            <include>**/*Test.java</include>
+            <include>**/*Tests.java</include>
+            <include>**/*TestCase.java</include>
+            <include>%regex[.*Test\$.*]</include>
+          </includes>
+          <!-- Surefire's built-in default excludes every class whose name
+               contains "$", which would otherwise silently drop the static
+               nested scenarios above. -->
+          <excludes>
+            <exclude>none</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 </project>

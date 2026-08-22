@@ -8,11 +8,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Optional;
 
-/**
- * Deliberately carries no stereotype annotation yet. Its collaborators become
- * Spring beans in Task 11; annotating it here would fail every context-loading
- * test for four tasks and hide real regressions behind an expected red suite.
- */
 public class WeatherServiceImpl implements WeatherService {
 
     private static final Logger log = LoggerFactory.getLogger(WeatherServiceImpl.class);
