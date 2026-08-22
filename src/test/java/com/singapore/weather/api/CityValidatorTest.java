@@ -39,6 +39,13 @@ class CityValidatorTest {
     }
 
     @Test
+    void acceptsMaxLengthInput() {
+        // Verify the accepted side of the length boundary: exactly 64 characters should be accepted
+        String maxLength = "a".repeat(64);
+        assertThat(CityValidator.normalise(maxLength)).isEqualTo(maxLength);
+    }
+
+    @Test
     void rejectsOverlyLongInput() {
         assertThatThrownBy(() -> CityValidator.normalise("a".repeat(65)))
                 .isInstanceOf(InvalidCityException.class);

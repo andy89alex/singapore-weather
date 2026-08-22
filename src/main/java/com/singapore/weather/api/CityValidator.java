@@ -2,6 +2,7 @@ package com.singapore.weather.api;
 
 import com.singapore.weather.domain.InvalidCityException;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -32,6 +33,8 @@ public final class CityValidator {
             throw new InvalidCityException(
                     "city may contain only letters, spaces, hyphens, apostrophes, periods and commas");
         }
-        return trimmed.toLowerCase();
+        // Use Locale.ROOT to avoid locale-dependent lowercasing (e.g., Turkish "I" -> "ı").
+        // This ensures consistent cache keys and lock-stripe mapping across all JVM locales.
+        return trimmed.toLowerCase(Locale.ROOT);
     }
 }
