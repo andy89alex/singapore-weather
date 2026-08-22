@@ -1614,7 +1614,7 @@ class WeatherServiceImplTest {
         holder.join();
 
         assertThat(result.stale()).isTrue();
-        assertThat(result.weather()).isEqualTo(FRESH);
+        assertThat(result.weather()).isEqualTo(NEWER);   // what service(NEWER) primed
         assertThat(providerCalls)
                 .as("a loser with a fallback must not call the provider")
                 .hasValue(callsBefore);
