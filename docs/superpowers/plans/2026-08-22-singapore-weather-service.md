@@ -1560,11 +1560,14 @@ import com.singapore.weather.cache.CachedWeather;
 import com.singapore.weather.cache.WeatherCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
-@Service
+/**
+ * Deliberately carries no stereotype annotation yet. Its collaborators become
+ * Spring beans in Task 11; annotating it here would fail every context-loading
+ * test for four tasks and hide real regressions behind an expected red suite.
+ */
 public class WeatherServiceImpl implements WeatherService {
 
     private static final Logger log = LoggerFactory.getLogger(WeatherServiceImpl.class);
@@ -2807,7 +2810,23 @@ public class ProviderConfig {
 }
 ```
 
-- [ ] **Step 7: Write the health indicator**
+- [ ] **Step 7: Register the weather service**
+
+Now that `WeatherCache` and `ProviderChain` are beans, `WeatherServiceImpl` can be
+registered. Add the stereotype annotation and its import to
+`src/main/java/com/singapore/weather/domain/WeatherServiceImpl.java`, and delete the
+class-level comment explaining why it was previously unannotated:
+
+```java
+import org.springframework.stereotype.Service;
+```
+
+```java
+@Service
+public class WeatherServiceImpl implements WeatherService {
+```
+
+- [ ] **Step 8: Write the health indicator**
 
 `src/main/java/com/singapore/weather/health/ProviderHealthIndicator.java`:
 
@@ -2855,17 +2874,17 @@ If `org.springframework.boot.health.contributor.HealthIndicator` cannot be resol
 `org.springframework.boot.actuate.health.HealthIndicator` and
 `org.springframework.boot.actuate.health.Health` instead — Boot 4 relocated these types.
 
-- [ ] **Step 8: Run the wiring test**
+- [ ] **Step 9: Run the wiring test**
 
 Run: `./mvnw -B test -Dtest=ProviderConfigTest`
 Expected: PASS, `Tests run: 2, Failures: 0, Errors: 0`.
 
-- [ ] **Step 9: Run the full suite**
+- [ ] **Step 10: Run the full suite**
 
 Run: `./mvnw -B test`
 Expected: BUILD SUCCESS, all tests from Tasks 1–11 pass.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add src/main/java/com/singapore/weather/config src/main/java/com/singapore/weather/health src/test/java/com/singapore/weather/config
