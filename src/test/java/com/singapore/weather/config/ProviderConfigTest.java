@@ -25,8 +25,11 @@ class ProviderConfigTest {
         @Test
         void registersBothProvidersInPriorityOrder() {
             assertThat(providers).hasSize(2);
+            // weatherstack is priority 1 and openweathermap is priority 2 by
+            // default (see application.yml), so asserting the exact order here
+            // really does assert priority order, unlike containsExactlyInAnyOrder.
             assertThat(providers.stream().map(WeatherProvider::name))
-                    .containsExactlyInAnyOrder("weatherstack", "openweathermap");
+                    .containsExactly("weatherstack", "openweathermap");
         }
     }
 

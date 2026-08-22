@@ -24,14 +24,14 @@ public class ProviderHealthIndicator implements HealthIndicator {
     @Override
     public Health health() {
         Health.Builder builder = Health.up();
-        boolean anyClosed = false;
+        boolean anyUsable = false;
 
         for (WeatherProvider provider : providers) {
             CircuitBreaker.State state = breakers.circuitBreaker(provider.name()).getState();
             builder.withDetail(provider.name(), state.name());
-            anyClosed |= state != CircuitBreaker.State.OPEN;
+            anyUsable |= state != CircuitBreaker.State.OPEN;
         }
 
-        return anyClosed ? builder.build() : builder.status("DEGRADED").build();
+        return anyUsable ? builder.build() : builder.status("DEGRADED").build();
     }
 }
