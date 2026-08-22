@@ -1,0 +1,14 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/.gradle-enterprise/
+
+.idea/
+*.iml
+*.iws
+*.ipr
+
+.env
+.DS_Store
+*.log
+
+.superpowers/
