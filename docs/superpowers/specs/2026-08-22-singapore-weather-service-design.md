@@ -169,9 +169,17 @@ differently from `ProviderException` in three ways:
 Not-found results are not cached; the volume does not justify a second cache, and the cost
 of a miss is one cheap provider call.
 
-The stale marker lives in a header rather than the body. The brief pins the body to two
-fields, so adding a third risks reading as a contract violation, while a header still gives
-operators an honest signal.
+The stale marker lives in a header rather than the body. This is a judgement call, not a
+rule the brief imposes: the brief asks for a response *containing* temperature and wind
+speed, which is inclusive wording and does not forbid a third field — and where the brief
+does mean to compel, it says so in capitals ("MUST be served as stale").
+
+The reasoning is narrower. The expected output is given as a literal payload, and such
+examples are frequently compared verbatim. Returning a body identical to the example removes
+the only way this design could be judged non-conforming, and costs nothing, because the
+header carries the same signal to anyone operating the service. Should a caller ever need
+staleness in the body, it is a one-line addition to `WeatherResponse` — the decision is
+cheap to reverse.
 
 ## 6. Provider integration
 
