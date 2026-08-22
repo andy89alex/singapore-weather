@@ -44,15 +44,36 @@ distributed tracing. Each is recorded in §11 with the reasoning.
 | Choice | Decision | Reasoning |
 | --- | --- | --- |
 | Language / runtime | Java 25 (LTS) | Latest LTS; virtual threads make blocking provider calls cheap. Adoption risk for reviewers is mitigated by a Dockerfile. |
-| Framework | Spring Boot | Required by the brief. |
+| Framework | Spring Boot 4.1.1 | Latest stable. Verified booting on Java 25 by a throwaway spike before this plan was written. |
 | Build | Maven, with the Maven Wrapper committed | Reviewers run `./mvnw` with nothing installed. |
 | Cache | Caffeine | In-process, high throughput, native support for size bounds and stats. |
-| Resilience | Resilience4j | Circuit breaker + retry with declarative configuration and Actuator metrics. |
+| Resilience | Resilience4j **core modules**, used programmatically | See below — the Spring Boot starter is deliberately not used. |
 | HTTP client | Spring `RestClient` | Per-provider instances with independent timeouts. |
 | Testing | JUnit 5, WireMock, MockMvc | Covers logic, real HTTP parsing, and the response contract respectively. |
 
 Virtual threads are enabled (`spring.threads.virtual.enabled=true`) so blocking provider
 calls do not pin platform threads.
+
+### Why Resilience4j is wired by hand
+
+The usual choice would be `resilience4j-spring-boot3` with `@CircuitBreaker` annotations.
+That artifact, at its current 2.4.0 release, depends on `resilience4j-spring6` — built
+against Spring Framework 6 — while Spring Boot 4.1.1 ships Spring Framework 7. No
+`resilience4j-spring7` artifact exists. Building the annotation-driven integration on Boot 4
+therefore risks AOP and auto-configuration breakage for no gain.
+
+The core modules carry no such coupling: `resilience4j-circuitbreaker` depends only on
+`resilience4j-core` and `slf4j-api`. They were verified against Spring Boot 4.1.1 on Java 25
+in a spike before this design was finalised.
+
+Wiring them by hand costs little here, because `ProviderChain` already invokes providers
+explicitly — there was never a need for AOP to intercept anything. It also makes the
+resilience behaviour visible at the call site rather than hidden behind an annotation, which
+serves the "new developers can change this safely" requirement.
+
+This is the one place where an alternative would change the stack: staying on Spring Boot
+3.5.x would allow the annotation-based starter. That trade is rejected because Boot 4.1.1
+runs on Java 25 today, whereas Boot 3.5 does not list Java 25 as supported.
 
 ## 4. Architecture
 
@@ -325,23 +346,28 @@ for this alone.
 
 ### Circuit breakers
 
+Because the Spring Boot starter is not used, the `resilience4j:` configuration namespace is
+not available. Settings live under our own `weather.resilience` prefix and are turned into
+`CircuitBreakerConfig` / `RetryConfig` objects by a `ResilienceConfig` `@Configuration`
+class, one registry entry per provider.
+
 ```yaml
-resilience4j:
-  circuitbreaker:
-    instances:
-      weatherstack:
-        sliding-window-size: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 3
-        automatic-transition-from-open-to-half-open-enabled: true
-      openweathermap: # same settings
-  retry:
-    instances:
-      weatherstack:
-        max-attempts: 2
-        wait-duration: 100ms
+weather:
+  resilience:
+    sliding-window-size: 10
+    failure-rate-threshold: 50            # percent
+    wait-duration-in-open-state: 10s
+    permitted-calls-in-half-open-state: 3
+    retry-max-attempts: 2
+    retry-wait-duration: 100ms
 ```
+
+`CircuitBreakerConfig.custom().recordException(...)` is where the §5 rule is enforced:
+`ProviderException` counts as a failure, `CityNotFoundException` does not.
+
+Metrics are bound to Micrometer through `TaggedCircuitBreakerMetrics` from
+`resilience4j-micrometer`, which needs no Spring integration module — it takes the registry
+and a `MeterRegistry` directly.
 
 HTTP timeouts per provider: connect 1s, read 2s.
 
@@ -486,7 +512,17 @@ compiles and its tests pass.
 
 ## 12. Open items for implementation
 
-- Confirm the current Spring Boot release that officially supports Java 25 and pin it.
+Resolved by a spike on 2026-08-22 (see §3):
+
+- **Spring Boot version — settled at 4.1.1.** Verified compiling, packaging and booting on
+  Java 25.0.4.1 with Actuator reporting UP.
+- **Jackson package names — settled.** Boot 4.1.1 ships Jackson 3 (`tools.jackson.databind`
+  3.1.5) but annotations remain `com.fasterxml.jackson.annotation` (2.21). DTOs use the
+  `com.fasterxml` annotation imports.
+- **Resilience4j integration — settled at core modules used programmatically**, because
+  `resilience4j-spring-boot3` still targets Spring Framework 6.
+
+Still open:
 - Confirm Weatherstack free-tier call limits and the HTTP-only constraint against live
   documentation, then record the figures in the README.
 - Confirm the exact Weatherstack `error.code` values that indicate an unresolvable location,
