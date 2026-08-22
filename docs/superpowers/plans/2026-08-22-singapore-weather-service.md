@@ -2948,7 +2948,9 @@ class FailoverIntegrationTest {
         registry.add("weather.providers.openweathermap.base-url", openweathermap::baseUrl);
         registry.add("weather.providers.openweathermap.api-key", () -> "owm-key");
         // Defeat the 3s cache so each request really reaches the chain.
-        registry.add("weather.cache.fresh-ttl", () -> "0s");
+        // -1s rather than 0s: isFresh() tests age <= freshTtl, so a zero TTL
+        // would still count two requests in the same clock tick as fresh.
+        registry.add("weather.cache.fresh-ttl", () -> "-1s");
     }
 
     @AfterAll
@@ -3033,7 +3035,7 @@ class StaleAfterTotalOutageTest {
         registry.add("weather.providers.weatherstack.api-key", () -> "ws-key");
         registry.add("weather.providers.openweathermap.base-url", openweathermap::baseUrl);
         registry.add("weather.providers.openweathermap.api-key", () -> "owm-key");
-        registry.add("weather.cache.fresh-ttl", () -> "0s");
+        registry.add("weather.cache.fresh-ttl", () -> "-1s");
     }
 
     @AfterAll
