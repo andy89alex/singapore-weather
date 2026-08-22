@@ -2473,6 +2473,11 @@ class CityValidatorTest {
     }
 
     @Test
+    void acceptsInputAtTheLengthLimit() {
+        assertThat(CityValidator.normalise("a".repeat(64))).isEqualTo("a".repeat(64));
+    }
+
+    @Test
     void rejectsOverlyLongInput() {
         assertThatThrownBy(() -> CityValidator.normalise("a".repeat(65)))
                 .isInstanceOf(InvalidCityException.class);
@@ -2494,6 +2499,7 @@ package com.singapore.weather.api;
 
 import com.singapore.weather.domain.InvalidCityException;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -2524,7 +2530,9 @@ public final class CityValidator {
             throw new InvalidCityException(
                     "city may contain only letters, spaces, hyphens, apostrophes, periods and commas");
         }
-        return trimmed.toLowerCase();
+        // Locale.ROOT, not the default: under a Turkish locale "I" lowercases to
+        // the dotless "ı", which would give the same city two different cache keys.
+        return trimmed.toLowerCase(Locale.ROOT);
     }
 }
 ```
