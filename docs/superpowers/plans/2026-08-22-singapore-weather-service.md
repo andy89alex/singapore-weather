@@ -230,6 +230,8 @@ target/
 .env
 .DS_Store
 *.log
+
+.superpowers/
 ```
 
 - [ ] **Step 7: Write the context-loads test**
