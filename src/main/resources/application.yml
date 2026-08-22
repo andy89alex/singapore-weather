@@ -16,3 +16,29 @@ management:
   endpoint:
     health:
       show-details: always
+
+weather:
+  cache:
+    fresh-ttl: 3s
+    stale-retention: 24h
+    max-size: 1000
+  resilience:
+    sliding-window-size: 10
+    failure-rate-threshold: 50
+    wait-duration-in-open-state: 10s
+    permitted-calls-in-half-open-state: 3
+    retry-max-attempts: 2
+    retry-wait-duration: 100ms
+  providers:
+    weatherstack:
+      priority: 1
+      base-url: http://api.weatherstack.com
+      api-key: ${WEATHERSTACK_API_KEY:}
+      connect-timeout: 1s
+      read-timeout: 2s
+    openweathermap:
+      priority: 2
+      base-url: https://api.openweathermap.org
+      api-key: ${OPENWEATHERMAP_API_KEY:}
+      connect-timeout: 1s
+      read-timeout: 2s
