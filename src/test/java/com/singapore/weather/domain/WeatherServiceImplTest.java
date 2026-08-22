@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -62,7 +64,8 @@ class WeatherServiceImplTest {
                 CircuitBreakerConfig.custom().ignoreExceptions(CityNotFoundException.class).build());
         RetryRegistry retries = RetryRegistry.of(
                 RetryConfig.custom().maxAttempts(1).build());
-        return new WeatherServiceImpl(cache, new ProviderChain(List.of(provider), breakers, retries));
+        return new WeatherServiceImpl(cache, new ProviderChain(List.of(provider), breakers, retries),
+                Duration.ofSeconds(3));
     }
 
     @Test
@@ -142,5 +145,68 @@ class WeatherServiceImplTest {
 
         assertThatThrownBy(() -> service.get("atlantis"))
                 .isInstanceOf(CityNotFoundException.class);
+    }
+
+    @Test
+    void servesStaleRatherThanQueueingWhenAnotherCallerHoldsTheRefreshLock() throws Exception {
+        WeatherServiceImpl service = service(NEWER);
+        service.get("singapore");                 // prime the cache
+        clock.advance(Duration.ofSeconds(10));    // now stale
+
+        CountDownLatch holderHasLock = new CountDownLatch(1);
+        CountDownLatch releaseHolder = new CountDownLatch(1);
+        Thread holder = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            holderHasLock.countDown();
+            awaitQuietly(releaseHolder);
+            return "held";
+        }));
+        assertThat(holderHasLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        int callsBefore = providerCalls.get();
+        WeatherResult result = service.get("singapore");
+
+        releaseHolder.countDown();
+        holder.join();
+
+        assertThat(result.stale()).isTrue();
+        assertThat(result.weather()).isEqualTo(NEWER);
+        assertThat(providerCalls)
+                .as("a loser with a fallback must not call the provider")
+                .hasValue(callsBefore);
+    }
+
+    @Test
+    void coldCacheLoserWaitsForTheWinnerInsteadOfCallingTheProviderItself() throws Exception {
+        WeatherServiceImpl service = service(FRESH);
+
+        CountDownLatch holderHasLock = new CountDownLatch(1);
+        CountDownLatch releaseHolder = new CountDownLatch(1);
+        Thread holder = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            holderHasLock.countDown();
+            awaitQuietly(releaseHolder);
+            cache.put("singapore", FRESH);        // the winner fills the cache
+            return "held";
+        }));
+        assertThat(holderHasLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        AtomicReference<WeatherResult> loserResult = new AtomicReference<>();
+        Thread loser = Thread.ofVirtual().start(() -> loserResult.set(service.get("singapore")));
+
+        releaseHolder.countDown();
+        holder.join();
+        loser.join();
+
+        assertThat(loserResult.get().weather()).isEqualTo(FRESH);
+        assertThat(providerCalls)
+                .as("the waiting caller must reuse what the winner stored, not fetch again")
+                .hasValue(0);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

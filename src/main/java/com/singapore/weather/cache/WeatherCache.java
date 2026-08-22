@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -63,8 +64,28 @@ public class WeatherCache {
      * requests produces one upstream call rather than one per request.
      */
     public <T> Optional<T> tryRefresh(String city, Supplier<T> refresh) {
+        return tryRefresh(city, Duration.ZERO, refresh);
+    }
+
+    /**
+     * As above, but waits up to {@code maxWait} for the lock. Callers with a
+     * stale value to fall back on pass {@link Duration#ZERO} and never wait;
+     * callers with nothing to serve wait, because returning immediately would
+     * mean either failing a request the providers could answer or making an
+     * unsynchronised call that reintroduces the stampede on a cold cache.
+     */
+    public <T> Optional<T> tryRefresh(String city, Duration maxWait, Supplier<T> refresh) {
         ReentrantLock lock = lockFor(city);
-        if (!lock.tryLock()) {
+        boolean acquired;
+        try {
+            acquired = maxWait.isZero()
+                    ? lock.tryLock()
+                    : lock.tryLock(maxWait.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
+        if (!acquired) {
             return Optional.empty();
         }
         try {

@@ -9,7 +9,8 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "weather")
 public record WeatherProperties(Cache cache, Resilience resilience, Providers providers) {
 
-    public record Cache(Duration freshTtl, Duration staleRetention, int maxSize) {
+    public record Cache(Duration freshTtl, Duration staleRetention, int maxSize,
+                        Duration coldRefreshWait) {
     }
 
     public record Resilience(

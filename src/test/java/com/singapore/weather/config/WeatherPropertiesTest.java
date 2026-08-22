@@ -24,6 +24,7 @@ class WeatherPropertiesTest {
         assertThat(properties.cache().freshTtl()).isEqualTo(Duration.ofSeconds(3));
         assertThat(properties.cache().staleRetention()).isEqualTo(Duration.ofHours(24));
         assertThat(properties.cache().maxSize()).isEqualTo(1000);
+        assertThat(properties.cache().coldRefreshWait()).isEqualTo(Duration.ofSeconds(3));
     }
 
     @Test

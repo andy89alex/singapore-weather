@@ -5,6 +5,7 @@ import com.singapore.weather.cache.WeatherCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Optional;
 
 /**
@@ -18,10 +19,12 @@ public class WeatherServiceImpl implements WeatherService {
 
     private final WeatherCache cache;
     private final ProviderChain chain;
+    private final Duration coldRefreshWait;
 
-    public WeatherServiceImpl(WeatherCache cache, ProviderChain chain) {
+    public WeatherServiceImpl(WeatherCache cache, ProviderChain chain, Duration coldRefreshWait) {
         this.cache = cache;
         this.chain = chain;
+        this.coldRefreshWait = coldRefreshWait;
     }
 
     @Override
@@ -37,9 +40,36 @@ public class WeatherServiceImpl implements WeatherService {
             return refreshed.get();
         }
 
-        // Another caller is already refreshing this city. Do not queue behind it.
-        return cached.map(entry -> WeatherResult.stale(entry.weather(), cache.age(entry)))
-                .orElseGet(() -> refresh(city, Optional.empty()));
+        // Another caller is already refreshing this city.
+        if (cached.isPresent()) {
+            // We have something to serve, so do not queue behind them.
+            return WeatherResult.stale(cached.get().weather(), cache.age(cached.get()));
+        }
+
+        // Cold cache: nothing to serve. Wait for the in-flight refresh rather than
+        // making our own unsynchronised provider call, which would reintroduce the
+        // stampede at start-up.
+        return cache.tryRefresh(city, coldRefreshWait, () -> refreshUnlessAlreadyFilled(city))
+                .orElseGet(() -> whateverTheWinnerLeft(city));
+    }
+
+    /** Runs with the lock held, so the caller we waited on may already have filled the cache. */
+    private WeatherResult refreshUnlessAlreadyFilled(String city) {
+        Optional<CachedWeather> filled = cache.find(city);
+        if (filled.isPresent() && cache.isFresh(filled.get())) {
+            return WeatherResult.fresh(filled.get().weather());
+        }
+        return refresh(city, filled);
+    }
+
+    /** The wait timed out. Serve whatever landed in the cache meanwhile, or admit defeat. */
+    private WeatherResult whateverTheWinnerLeft(String city) {
+        return cache.find(city)
+                .map(entry -> cache.isFresh(entry)
+                        ? WeatherResult.fresh(entry.weather())
+                        : WeatherResult.stale(entry.weather(), cache.age(entry)))
+                .orElseThrow(() -> new AllProvidersFailedException(
+                        "Timed out waiting for an in-flight refresh of city: " + city));
     }
 
     private WeatherResult refresh(String city, Optional<CachedWeather> fallback) {

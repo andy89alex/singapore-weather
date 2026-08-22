@@ -72,6 +72,57 @@ class WeatherCacheStampedeTest {
     }
 
     @Test
+    void aWaitingCallerAcquiresTheLockOnceTheWinnerFinishes() throws Exception {
+        CountDownLatch winnerHoldsLock = new CountDownLatch(1);
+        CountDownLatch releaseWinner = new CountDownLatch(1);
+        AtomicInteger waiterRefreshes = new AtomicInteger();
+
+        Thread winner = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            winnerHoldsLock.countDown();
+            await(releaseWinner);
+            return new Weather(29, 20);
+        }));
+
+        assertThat(winnerHoldsLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        Thread waiter = Thread.ofVirtual().start(() ->
+                cache.tryRefresh("singapore", Duration.ofSeconds(5), () -> {
+                    waiterRefreshes.incrementAndGet();
+                    return new Weather(30, 21);
+                }));
+
+        releaseWinner.countDown();
+        winner.join();
+        waiter.join();
+
+        assertThat(waiterRefreshes)
+                .as("a bounded wait must acquire the lock rather than give up")
+                .hasValue(1);
+    }
+
+    @Test
+    void aWaitingCallerGivesUpWhenTheWinnerHoldsTheLockTooLong() throws Exception {
+        CountDownLatch winnerHoldsLock = new CountDownLatch(1);
+        CountDownLatch releaseWinner = new CountDownLatch(1);
+
+        Thread winner = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            winnerHoldsLock.countDown();
+            await(releaseWinner);
+            return new Weather(29, 20);
+        }));
+
+        assertThat(winnerHoldsLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        Optional<Weather> result =
+                cache.tryRefresh("singapore", Duration.ofMillis(50), () -> new Weather(30, 21));
+
+        releaseWinner.countDown();
+        winner.join();
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
     void aLaterCallerCanRefreshOnceTheLockIsFree() {
         assertThat(cache.tryRefresh("singapore", () -> new Weather(29, 20))).isPresent();
         assertThat(cache.tryRefresh("singapore", () -> new Weather(30, 21))).isPresent();

@@ -22,6 +22,9 @@ weather:
     fresh-ttl: 3s
     stale-retention: 24h
     max-size: 1000
+    # How long a caller with no cached value waits for an in-flight refresh
+    # before giving up. One provider read timeout plus margin.
+    cold-refresh-wait: 3s
   resilience:
     sliding-window-size: 10
     failure-rate-threshold: 50
