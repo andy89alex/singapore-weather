@@ -85,7 +85,7 @@ GET /v1/weather?city=singapore
 | Package | Contents | Responsibility |
 | --- | --- | --- |
 | `api` | `WeatherController`, `WeatherResponse`, `GlobalExceptionHandler` | HTTP contract and JSON shape. The only layer that knows about HTTP. |
-| `domain` | `Weather`, `WeatherProvider`, `WeatherService` | Model and orchestration. Knows nothing about Weatherstack or OpenWeatherMap. |
+| `domain` | `Weather`, `WeatherProvider`, `WeatherService` (interface), `WeatherServiceImpl` | Model and orchestration. Knows nothing about Weatherstack or OpenWeatherMap. |
 | `cache` | `WeatherCache`, `CachedWeather` | Soft-TTL / hard-TTL logic and stampede protection. Uses an injected `Clock`. |
 | `provider.weatherstack` | `WeatherstackProvider` and its response DTOs | Vendor detail, fully isolated. |
 | `provider.openweathermap` | `OpenWeatherMapProvider` and its response DTOs | Vendor detail, fully isolated. |
@@ -101,12 +101,23 @@ public interface WeatherProvider {
 }
 ```
 
-Spring injects `List<WeatherProvider>`, sorted by `priority()`. `WeatherService` iterates
+Spring injects `List<WeatherProvider>`, sorted by `priority()`. `WeatherServiceImpl` iterates
 the list and never learns which provider answered.
+
+### Service layer convention
+
+The service layer follows the project's `Interface` + `Impl` convention: `WeatherService`
+declares the contract, `WeatherServiceImpl` provides the single implementation, and
+`WeatherController` depends only on the interface.
+
+The convention stops at the service layer. `WeatherCache` stays a concrete class — it has
+one obvious shape and no second implementation is anticipated within this scope — and
+`WeatherProvider` is an interface on its own merits, since it genuinely has two
+implementations and gaining a third is an explicit requirement.
 
 Isolation boundaries that must hold:
 
-- `WeatherService` does not know which provider responded.
+- `WeatherServiceImpl` does not know which provider responded.
 - Providers do not know a cache exists.
 - The controller does not know failover exists.
 
