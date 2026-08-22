@@ -1,5 +1,6 @@
 package com.singapore.weather.provider.weatherstack;
 
+import com.singapore.weather.domain.AuthenticationFailedException;
 import com.singapore.weather.domain.CityNotFoundException;
 import com.singapore.weather.domain.ProviderException;
 import com.singapore.weather.domain.Weather;
@@ -12,6 +13,7 @@ import org.springframework.web.client.RestClient;
 import java.time.Duration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -47,10 +49,16 @@ class WeatherstackProviderTest {
 
     @Test
     void parsesASuccessfulResponse() {
-        stub(200, """
-                {"request":{"query":"Singapore"},
-                 "current":{"temperature":29,"wind_speed":20,"humidity":70}}
-                """);
+        wiremock.stubFor(get(urlPathEqualTo("/current"))
+                .withQueryParam("access_key", equalTo("test-key"))
+                .withQueryParam("query", equalTo("singapore"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"request":{"query":"Singapore"},
+                                 "current":{"temperature":29,"wind_speed":20,"humidity":70}}
+                                """)));
 
         Weather weather = provider().fetch("singapore");
 
@@ -68,6 +76,17 @@ class WeatherstackProviderTest {
         assertThatThrownBy(() -> provider().fetch("singapore"))
                 .isInstanceOf(ProviderException.class)
                 .hasMessageContaining("104");
+    }
+
+    @Test
+    void mapsTheInvalidAccessKeyCodeToAnAuthenticationFailure() {
+        stub(200, """
+                {"success":false,"error":{"code":101,"type":"invalid_access_key",
+                 "info":"You have not supplied a valid API Access Key."}}
+                """);
+
+        assertThatThrownBy(() -> provider().fetch("singapore"))
+                .isInstanceOf(AuthenticationFailedException.class);
     }
 
     @Test

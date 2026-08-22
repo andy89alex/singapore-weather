@@ -39,6 +39,18 @@ class WeatherCacheTest {
     }
 
     @Test
+    void treatsAnEntryExactlyAtTheFreshTtlBoundaryAsFresh() {
+        cache.put("singapore", SINGAPORE);
+        clock.advance(Duration.ofMillis(3000));
+
+        CachedWeather entry = cache.find("singapore").orElseThrow();
+
+        assertThat(cache.isFresh(entry))
+                .as("isFresh uses age <= freshTtl, so age == freshTtl exactly must still be fresh")
+                .isTrue();
+    }
+
+    @Test
     void treatsAnEntryOlderThanTheFreshTtlAsStale() {
         cache.put("singapore", SINGAPORE);
         clock.advance(Duration.ofMillis(3100));

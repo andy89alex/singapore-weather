@@ -1,5 +1,6 @@
 package com.singapore.weather.provider.openweathermap;
 
+import com.singapore.weather.domain.AuthenticationFailedException;
 import com.singapore.weather.domain.CityNotFoundException;
 import com.singapore.weather.domain.ProviderException;
 import com.singapore.weather.domain.Weather;
@@ -12,6 +13,7 @@ import org.springframework.web.client.RestClient;
 import java.time.Duration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -47,9 +49,18 @@ class OpenWeatherMapProviderTest {
 
     @Test
     void parsesAndConvertsWindToKilometresPerHour() {
-        stub(200, """
-                {"main":{"temp":29.4,"humidity":74},"wind":{"speed":5.5,"deg":90}}
-                """);
+        // units=metric matters: without it OpenWeatherMap returns Kelvin, which
+        // would still parse cleanly and be wrong by ~273 degrees.
+        wiremock.stubFor(get(urlPathEqualTo("/data/2.5/weather"))
+                .withQueryParam("q", equalTo("singapore"))
+                .withQueryParam("appid", equalTo("test-key"))
+                .withQueryParam("units", equalTo("metric"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"main":{"temp":29.4,"humidity":74},"wind":{"speed":5.5,"deg":90}}
+                                """)));
 
         Weather weather = provider().fetch("singapore");
 
@@ -70,13 +81,23 @@ class OpenWeatherMapProviderTest {
     }
 
     @Test
-    void mapsUnauthorisedToAProviderFailure() {
+    void mapsUnauthorisedToAnAuthenticationFailure() {
         stub(401, """
                 {"cod":401,"message":"Invalid API key."}
                 """);
 
         assertThatThrownBy(() -> provider().fetch("singapore"))
-                .isInstanceOf(ProviderException.class);
+                .isInstanceOf(AuthenticationFailedException.class);
+    }
+
+    @Test
+    void mapsForbiddenToAnAuthenticationFailure() {
+        stub(403, """
+                {"cod":403,"message":"Forbidden."}
+                """);
+
+        assertThatThrownBy(() -> provider().fetch("singapore"))
+                .isInstanceOf(AuthenticationFailedException.class);
     }
 
     @Test
@@ -102,6 +123,14 @@ class OpenWeatherMapProviderTest {
         stub(200, """
                 {"main":{"temp":29.4}}
                 """);
+
+        assertThatThrownBy(() -> provider().fetch("singapore"))
+                .isInstanceOf(ProviderException.class);
+    }
+
+    @Test
+    void treatsMalformedJsonAsAFailure() {
+        stub(200, "{not json");
 
         assertThatThrownBy(() -> provider().fetch("singapore"))
                 .isInstanceOf(ProviderException.class);

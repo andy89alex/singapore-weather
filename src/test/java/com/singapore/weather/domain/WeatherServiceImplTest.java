@@ -39,6 +39,10 @@ class WeatherServiceImplTest {
     }
 
     private WeatherServiceImpl service(Weather result) {
+        return service(result, Duration.ofSeconds(3));
+    }
+
+    private WeatherServiceImpl service(Weather result, Duration coldRefreshWait) {
         WeatherProvider provider = new WeatherProvider() {
             @Override
             public String name() {
@@ -64,8 +68,9 @@ class WeatherServiceImplTest {
                 CircuitBreakerConfig.custom().ignoreExceptions(CityNotFoundException.class).build());
         RetryRegistry retries = RetryRegistry.of(
                 RetryConfig.custom().maxAttempts(1).build());
-        return new WeatherServiceImpl(cache, new ProviderChain(List.of(provider), breakers, retries),
-                Duration.ofSeconds(3));
+        return new WeatherServiceImpl(cache,
+                new ProviderChain(List.of(provider), breakers, retries, Duration.ofSeconds(30)),
+                coldRefreshWait);
     }
 
     @Test
@@ -209,6 +214,37 @@ class WeatherServiceImplTest {
         assertThat(loserResult.get().weather()).isEqualTo(FRESH);
         assertThat(providerCalls)
                 .as("the waiting caller must reuse what the winner stored, not fetch again")
+                .hasValue(0);
+    }
+
+    @Test
+    void coldCacheLoserGivesUpWhenTheWaitExpires() throws Exception {
+        // Short enough that the test runs fast, long enough that the holder
+        // thread below is reliably still parked on releaseHolder when the
+        // wait expires — the holder is only released after we have already
+        // observed the timeout outcome, so there is no race here.
+        Duration shortColdRefreshWait = Duration.ofMillis(100);
+        WeatherServiceImpl service = service(FRESH, shortColdRefreshWait);
+
+        CountDownLatch holderHasLock = new CountDownLatch(1);
+        CountDownLatch releaseHolder = new CountDownLatch(1);
+        Thread holder = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            holderHasLock.countDown();
+            awaitQuietly(releaseHolder);
+            cache.put("singapore", FRESH);
+            return "held";
+        }));
+        assertThat(holderHasLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> service.get("singapore"))
+                .isInstanceOf(AllProvidersFailedException.class)
+                .hasMessageContaining("Timed out waiting for an in-flight refresh");
+
+        releaseHolder.countDown();
+        holder.join();
+
+        assertThat(providerCalls)
+                .as("a caller that gave up waiting must not have made its own provider call")
                 .hasValue(0);
     }
 
