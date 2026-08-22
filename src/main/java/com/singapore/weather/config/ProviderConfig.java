@@ -52,7 +52,8 @@ public class ProviderConfig {
     @Bean
     ProviderChain providerChain(List<WeatherProvider> providers,
                                 CircuitBreakerRegistry breakers,
-                                RetryRegistry retries) {
-        return new ProviderChain(providers, breakers, retries);
+                                RetryRegistry retries,
+                                WeatherProperties properties) {
+        return new ProviderChain(providers, breakers, retries, properties.resilience().chainDeadline());
     }
 }

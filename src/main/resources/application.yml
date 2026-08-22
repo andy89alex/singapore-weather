@@ -23,8 +23,27 @@ weather:
     stale-retention: 24h
     max-size: 1000
     # How long a caller with no cached value waits for an in-flight refresh
-    # before giving up. One provider read timeout plus margin.
-    cold-refresh-wait: 3s
+    # before giving up.
+    #
+    # This must cover the lock winner's real worst case, not one provider
+    # read timeout: the winner runs the whole provider chain, and each
+    # provider retries. With the settings below:
+    #   per attempt      = connect-timeout (1s) + read-timeout (1s)      = 2s
+    #   per provider      = retry-max-attempts (2) x 2s + 1 retry wait (100ms) = 4.1s
+    #   whole chain       = providers (2) x 4.1s                          = 8.2s
+    # resilience.chain-deadline is set to 8.5s (headroom above the 8.2s
+    # arithmetic result for nanoTime/scheduling jitter), and cold-refresh-wait
+    # is set to 9s so a loser never gives up before the chain deadline could
+    # possibly fire. The two numbers are derived from the same arithmetic,
+    # not guessed independently.
+    #
+    # read-timeout was reduced from 2s to 1s (see weather.providers below) to
+    # bring this worst case down from ~12.2s to ~8.2s: a 12s client-facing
+    # wait was judged unreasonable, and 1s is still generous for a weather
+    # API that normally answers in well under a second. retry-max-attempts
+    # was left at 2 (one retry) — that is already the minimum that satisfies
+    # "retry transient failures once before failover".
+    cold-refresh-wait: 9s
   resilience:
     sliding-window-size: 10
     failure-rate-threshold: 50
@@ -32,16 +51,22 @@ weather:
     permitted-calls-in-half-open-state: 3
     retry-max-attempts: 2
     retry-wait-duration: 100ms
+    # Total budget for ProviderChain.fetch across every provider and every
+    # retry attempt. See the arithmetic above cache.cold-refresh-wait: this
+    # is set to 8.5s, just above the 8.2s worst case the current settings
+    # produce, so a caller is never blocked appreciably longer than that
+    # worst case even if more providers are added later.
+    chain-deadline: 8500ms
   providers:
     weatherstack:
       priority: 1
       base-url: http://api.weatherstack.com
       api-key: ${WEATHERSTACK_API_KEY:}
       connect-timeout: 1s
-      read-timeout: 2s
+      read-timeout: 1s
     openweathermap:
       priority: 2
       base-url: https://api.openweathermap.org
       api-key: ${OPENWEATHERMAP_API_KEY:}
       connect-timeout: 1s
-      read-timeout: 2s
+      read-timeout: 1s

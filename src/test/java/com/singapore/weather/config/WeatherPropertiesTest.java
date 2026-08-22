@@ -24,7 +24,7 @@ class WeatherPropertiesTest {
         assertThat(properties.cache().freshTtl()).isEqualTo(Duration.ofSeconds(3));
         assertThat(properties.cache().staleRetention()).isEqualTo(Duration.ofHours(24));
         assertThat(properties.cache().maxSize()).isEqualTo(1000);
-        assertThat(properties.cache().coldRefreshWait()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(properties.cache().coldRefreshWait()).isEqualTo(Duration.ofSeconds(9));
     }
 
     @Test
@@ -40,5 +40,6 @@ class WeatherPropertiesTest {
         assertThat(properties.resilience().slidingWindowSize()).isEqualTo(10);
         assertThat(properties.resilience().failureRateThreshold()).isEqualTo(50.0f);
         assertThat(properties.resilience().retryMaxAttempts()).isEqualTo(2);
+        assertThat(properties.resilience().chainDeadline()).isEqualTo(Duration.ofMillis(8500));
     }
 }

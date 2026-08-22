@@ -23,8 +23,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AllProvidersFailedException.class)
     ProblemDetail allProvidersFailed(AllProvidersFailedException e) {
-        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Weather unavailable",
-                "Every weather provider is unavailable and no cached reading exists.");
+        // Surfacing the real message distinguishes "every provider failed" from
+        // "timed out waiting for an in-flight refresh" — the same 503 status
+        // otherwise hides which of those two very different situations occurred.
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Weather unavailable", e.getMessage());
     }
 
     private static ProblemDetail problem(HttpStatus status, String title, String detail) {

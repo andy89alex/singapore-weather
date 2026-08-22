@@ -8,3 +8,4 @@ weather:
     permitted-calls-in-half-open-state: 2
     retry-max-attempts: 1
     retry-wait-duration: 10ms
+    chain-deadline: 30s
