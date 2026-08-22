@@ -3171,6 +3171,9 @@ weather:
     failure-rate-threshold: 50
     wait-duration-in-open-state: 10s
     permitted-calls-in-half-open-state: 2
+    # Retry must drop to 1 here: with production's 2, each logical call would
+    # register two circuit-breaker events and the circuit would open at a
+    # different point than the tests' fixed priming loop expects.
     retry-max-attempts: 1
     retry-wait-duration: 10ms
 ```
@@ -3188,7 +3191,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -3277,7 +3280,7 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
