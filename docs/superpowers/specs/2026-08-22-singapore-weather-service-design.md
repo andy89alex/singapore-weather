@@ -307,6 +307,24 @@ in fact answered faster than the winner — p99 latency improves rather than deg
 cost is that staleness can reach 3s plus one provider round trip. For temperature and wind
 speed, 200ms is physically meaningless.
 
+#### The cold-cache case
+
+The code above assumes a stale entry exists to fall back on. On a cold cache — the first
+burst of traffic after start-up, or the first request for a city — a loser has nothing to
+serve, and returning immediately would mean either failing a request the providers could
+have answered, or making an unsynchronised provider call. The second choice would move the
+stampede from the moment of expiry to the moment of start-up rather than eliminating it: at
+1,000 rps, the first second after boot would still produce hundreds of identical calls.
+
+So a loser with no fallback waits for the lock with a bounded timeout
+(`weather.cache.cold-refresh-wait`, default 3s — one provider read timeout plus margin).
+On acquiring it, it re-checks the cache **before** calling any provider, because the thread
+it was waiting on has almost certainly just filled it. If the wait times out, it re-checks
+once more and serves whatever is there, failing only if there is still nothing.
+
+The two paths differ because their alternatives differ: a warm loser has something better to
+do than wait, and a cold loser does not.
+
 ### Striped locks
 
 A `Map<String, Lock>` keyed by city grows without bound, because `city` is caller-supplied;

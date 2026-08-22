@@ -314,6 +314,7 @@ class WeatherPropertiesTest {
         assertThat(properties.cache().freshTtl()).isEqualTo(Duration.ofSeconds(3));
         assertThat(properties.cache().staleRetention()).isEqualTo(Duration.ofHours(24));
         assertThat(properties.cache().maxSize()).isEqualTo(1000);
+        assertThat(properties.cache().coldRefreshWait()).isEqualTo(Duration.ofSeconds(3));
     }
 
     @Test
@@ -354,7 +355,8 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "weather")
 public record WeatherProperties(Cache cache, Resilience resilience, Providers providers) {
 
-    public record Cache(Duration freshTtl, Duration staleRetention, int maxSize) {
+    public record Cache(Duration freshTtl, Duration staleRetention, int maxSize,
+                        Duration coldRefreshWait) {
     }
 
     public record Resilience(
@@ -393,6 +395,9 @@ weather:
     fresh-ttl: 3s
     stale-retention: 24h
     max-size: 1000
+    # How long a caller with no cached value waits for an in-flight refresh
+    # before giving up. One provider read timeout plus margin.
+    cold-refresh-wait: 3s
   resilience:
     sliding-window-size: 10
     failure-rate-threshold: 50
@@ -1229,6 +1234,57 @@ class WeatherCacheStampedeTest {
     }
 
     @Test
+    void aWaitingCallerAcquiresTheLockOnceTheWinnerFinishes() throws Exception {
+        CountDownLatch winnerHoldsLock = new CountDownLatch(1);
+        CountDownLatch releaseWinner = new CountDownLatch(1);
+        AtomicInteger waiterRefreshes = new AtomicInteger();
+
+        Thread winner = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            winnerHoldsLock.countDown();
+            await(releaseWinner);
+            return new Weather(29, 20);
+        }));
+
+        assertThat(winnerHoldsLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        Thread waiter = Thread.ofVirtual().start(() ->
+                cache.tryRefresh("singapore", Duration.ofSeconds(5), () -> {
+                    waiterRefreshes.incrementAndGet();
+                    return new Weather(30, 21);
+                }));
+
+        releaseWinner.countDown();
+        winner.join();
+        waiter.join();
+
+        assertThat(waiterRefreshes)
+                .as("a bounded wait must acquire the lock rather than give up")
+                .hasValue(1);
+    }
+
+    @Test
+    void aWaitingCallerGivesUpWhenTheWinnerHoldsTheLockTooLong() throws Exception {
+        CountDownLatch winnerHoldsLock = new CountDownLatch(1);
+        CountDownLatch releaseWinner = new CountDownLatch(1);
+
+        Thread winner = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            winnerHoldsLock.countDown();
+            await(releaseWinner);
+            return new Weather(29, 20);
+        }));
+
+        assertThat(winnerHoldsLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        Optional<Weather> result =
+                cache.tryRefresh("singapore", Duration.ofMillis(50), () -> new Weather(30, 21));
+
+        releaseWinner.countDown();
+        winner.join();
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
     void aLaterCallerCanRefreshOnceTheLockIsFree() {
         assertThat(cache.tryRefresh("singapore", () -> new Weather(29, 20))).isPresent();
         assertThat(cache.tryRefresh("singapore", () -> new Weather(30, 21))).isPresent();
@@ -1268,6 +1324,7 @@ Add these imports to `WeatherCache.java`:
 
 ```java
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 ```
@@ -1295,8 +1352,28 @@ Add the methods:
      * requests produces one upstream call rather than one per request.
      */
     public <T> Optional<T> tryRefresh(String city, Supplier<T> refresh) {
+        return tryRefresh(city, Duration.ZERO, refresh);
+    }
+
+    /**
+     * As above, but waits up to {@code maxWait} for the lock. Callers with a
+     * stale value to fall back on pass {@link Duration#ZERO} and never wait;
+     * callers with nothing to serve wait, because returning immediately would
+     * mean either failing a request the providers could answer or making an
+     * unsynchronised call that reintroduces the stampede on a cold cache.
+     */
+    public <T> Optional<T> tryRefresh(String city, Duration maxWait, Supplier<T> refresh) {
         ReentrantLock lock = lockFor(city);
-        if (!lock.tryLock()) {
+        boolean acquired;
+        try {
+            acquired = maxWait.isZero()
+                    ? lock.tryLock()
+                    : lock.tryLock(maxWait.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
+        if (!acquired) {
             return Optional.empty();
         }
         try {
@@ -1346,14 +1423,20 @@ git commit -m "Add striped-lock stampede protection to the weather cache"
 - Produces:
   - `WeatherResult(Weather weather, boolean stale, Duration age)`
   - `WeatherService.get(String city) -> WeatherResult` (interface)
-  - `new WeatherServiceImpl(WeatherCache cache, ProviderChain chain)`
+  - `new WeatherServiceImpl(WeatherCache cache, ProviderChain chain, Duration coldRefreshWait)`
 
 **Behaviour, in order:**
 1. Fresh entry → return it, `stale = false`.
 2. Otherwise try to win the refresh lock. On success, fetch and store; return `stale = false`.
-3. Lost the lock and an old entry exists → return it, `stale = true`.
+3. Lost the lock and an old entry exists → return it, `stale = true`, without queueing.
 4. Refresh failed with `AllProvidersFailedException` and an old entry exists → return it, `stale = true`.
-5. No entry at all → let the exception propagate.
+5. Lost the lock with **no** entry to fall back on → wait up to `coldRefreshWait` for the
+   lock, re-checking the cache on acquisition before calling any provider.
+6. Nothing usable anywhere → let the exception propagate.
+
+Rules 3 and 5 differ because their alternatives differ: a warm loser has something better to
+do than wait, a cold loser does not. Calling the provider without the lock — the obvious
+shortcut — would move the stampede from the moment of expiry to the moment of start-up.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1374,6 +1457,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -1424,7 +1509,8 @@ class WeatherServiceImplTest {
                 CircuitBreakerConfig.custom().ignoreExceptions(CityNotFoundException.class).build());
         RetryRegistry retries = RetryRegistry.of(
                 RetryConfig.custom().maxAttempts(1).build());
-        return new WeatherServiceImpl(cache, new ProviderChain(List.of(provider), breakers, retries));
+        return new WeatherServiceImpl(cache, new ProviderChain(List.of(provider), breakers, retries),
+                Duration.ofSeconds(3));
     }
 
     @Test
@@ -1505,6 +1591,69 @@ class WeatherServiceImplTest {
         assertThatThrownBy(() -> service.get("atlantis"))
                 .isInstanceOf(CityNotFoundException.class);
     }
+
+    @Test
+    void servesStaleRatherThanQueueingWhenAnotherCallerHoldsTheRefreshLock() throws Exception {
+        WeatherServiceImpl service = service(NEWER);
+        service.get("singapore");                 // prime the cache
+        clock.advance(Duration.ofSeconds(10));    // now stale
+
+        CountDownLatch holderHasLock = new CountDownLatch(1);
+        CountDownLatch releaseHolder = new CountDownLatch(1);
+        Thread holder = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            holderHasLock.countDown();
+            awaitQuietly(releaseHolder);
+            return "held";
+        }));
+        assertThat(holderHasLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        int callsBefore = providerCalls.get();
+        WeatherResult result = service.get("singapore");
+
+        releaseHolder.countDown();
+        holder.join();
+
+        assertThat(result.stale()).isTrue();
+        assertThat(result.weather()).isEqualTo(FRESH);
+        assertThat(providerCalls)
+                .as("a loser with a fallback must not call the provider")
+                .hasValue(callsBefore);
+    }
+
+    @Test
+    void coldCacheLoserWaitsForTheWinnerInsteadOfCallingTheProviderItself() throws Exception {
+        WeatherServiceImpl service = service(FRESH);
+
+        CountDownLatch holderHasLock = new CountDownLatch(1);
+        CountDownLatch releaseHolder = new CountDownLatch(1);
+        Thread holder = Thread.ofVirtual().start(() -> cache.tryRefresh("singapore", () -> {
+            holderHasLock.countDown();
+            awaitQuietly(releaseHolder);
+            cache.put("singapore", FRESH);        // the winner fills the cache
+            return "held";
+        }));
+        assertThat(holderHasLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+        AtomicReference<WeatherResult> loserResult = new AtomicReference<>();
+        Thread loser = Thread.ofVirtual().start(() -> loserResult.set(service.get("singapore")));
+
+        releaseHolder.countDown();
+        holder.join();
+        loser.join();
+
+        assertThat(loserResult.get().weather()).isEqualTo(FRESH);
+        assertThat(providerCalls)
+                .as("the waiting caller must reuse what the winner stored, not fetch again")
+                .hasValue(0);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }
 ```
 
@@ -1561,6 +1710,7 @@ import com.singapore.weather.cache.WeatherCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Optional;
 
 /**
@@ -1574,10 +1724,12 @@ public class WeatherServiceImpl implements WeatherService {
 
     private final WeatherCache cache;
     private final ProviderChain chain;
+    private final Duration coldRefreshWait;
 
-    public WeatherServiceImpl(WeatherCache cache, ProviderChain chain) {
+    public WeatherServiceImpl(WeatherCache cache, ProviderChain chain, Duration coldRefreshWait) {
         this.cache = cache;
         this.chain = chain;
+        this.coldRefreshWait = coldRefreshWait;
     }
 
     @Override
@@ -1593,9 +1745,36 @@ public class WeatherServiceImpl implements WeatherService {
             return refreshed.get();
         }
 
-        // Another caller is already refreshing this city. Do not queue behind it.
-        return cached.map(entry -> WeatherResult.stale(entry.weather(), cache.age(entry)))
-                .orElseGet(() -> refresh(city, Optional.empty()));
+        // Another caller is already refreshing this city.
+        if (cached.isPresent()) {
+            // We have something to serve, so do not queue behind them.
+            return WeatherResult.stale(cached.get().weather(), cache.age(cached.get()));
+        }
+
+        // Cold cache: nothing to serve. Wait for the in-flight refresh rather than
+        // making our own unsynchronised provider call, which would reintroduce the
+        // stampede at start-up.
+        return cache.tryRefresh(city, coldRefreshWait, () -> refreshUnlessAlreadyFilled(city))
+                .orElseGet(() -> whateverTheWinnerLeft(city));
+    }
+
+    /** Runs with the lock held, so the caller we waited on may already have filled the cache. */
+    private WeatherResult refreshUnlessAlreadyFilled(String city) {
+        Optional<CachedWeather> filled = cache.find(city);
+        if (filled.isPresent() && cache.isFresh(filled.get())) {
+            return WeatherResult.fresh(filled.get().weather());
+        }
+        return refresh(city, filled);
+    }
+
+    /** The wait timed out. Serve whatever landed in the cache meanwhile, or admit defeat. */
+    private WeatherResult whateverTheWinnerLeft(String city) {
+        return cache.find(city)
+                .map(entry -> cache.isFresh(entry)
+                        ? WeatherResult.fresh(entry.weather())
+                        : WeatherResult.stale(entry.weather(), cache.age(entry)))
+                .orElseThrow(() -> new AllProvidersFailedException(
+                        "Timed out waiting for an in-flight refresh of city: " + city));
     }
 
     private WeatherResult refresh(String city, Optional<CachedWeather> fallback) {
@@ -2812,19 +2991,23 @@ public class ProviderConfig {
 
 - [ ] **Step 7: Register the weather service**
 
-Now that `WeatherCache` and `ProviderChain` are beans, `WeatherServiceImpl` can be
-registered. Add the stereotype annotation and its import to
-`src/main/java/com/singapore/weather/domain/WeatherServiceImpl.java`, and delete the
-class-level comment explaining why it was previously unannotated:
+`WeatherServiceImpl` takes a `Duration` that cannot be autowired by type, so it is
+registered explicitly rather than by component scan. This also keeps the domain package free
+of Spring annotations, consistent with `WeatherCache` and `ProviderChain`. Delete the
+class-level comment in `WeatherServiceImpl` that explained why it was unannotated, and add
+to `CacheConfig`:
 
 ```java
-import org.springframework.stereotype.Service;
+    @Bean
+    WeatherService weatherService(WeatherCache cache, ProviderChain chain,
+                                  WeatherProperties properties) {
+        return new WeatherServiceImpl(cache, chain, properties.cache().coldRefreshWait());
+    }
 ```
 
-```java
-@Service
-public class WeatherServiceImpl implements WeatherService {
-```
+with the imports `com.singapore.weather.domain.ProviderChain`,
+`com.singapore.weather.domain.WeatherService` and
+`com.singapore.weather.domain.WeatherServiceImpl`.
 
 - [ ] **Step 8: Write the health indicator**
 
