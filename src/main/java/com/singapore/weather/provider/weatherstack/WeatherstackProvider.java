@@ -1,5 +1,6 @@
 package com.singapore.weather.provider.weatherstack;
 
+import com.singapore.weather.domain.AuthenticationFailedException;
 import com.singapore.weather.domain.CityNotFoundException;
 import com.singapore.weather.domain.ProviderException;
 import com.singapore.weather.domain.Weather;
@@ -20,6 +21,17 @@ public class WeatherstackProvider implements WeatherProvider {
 
     /** Weatherstack signals an unusable query with this error code. */
     private static final Set<Integer> CITY_NOT_FOUND_CODES = Set.of(615);
+
+    /**
+     * Weatherstack's documented access-key errors. 101 ("Invalid API Access
+     * Key") is the one that unambiguously means the credential itself is bad
+     * and will not heal on retry. Other 10x codes (e.g. 102 inactive user,
+     * 103 invalid API function) are left as plain {@link ProviderException}s
+     * because they are not clearly a bad key, and the code comment on
+     * {@link #toException} already fails safe toward failover for anything
+     * unrecognised.
+     */
+    private static final Set<Integer> AUTHENTICATION_FAILURE_CODES = Set.of(101);
 
     private final RestClient restClient;
     private final String accessKey;
@@ -77,6 +89,10 @@ public class WeatherstackProvider implements WeatherProvider {
         }
         if (error.code() != null && CITY_NOT_FOUND_CODES.contains(error.code())) {
             return new CityNotFoundException(city);
+        }
+        if (error.code() != null && AUTHENTICATION_FAILURE_CODES.contains(error.code())) {
+            return new AuthenticationFailedException(
+                    "Weatherstack error %d (%s): %s".formatted(error.code(), error.type(), error.info()));
         }
         // Unrecognised codes fail safe toward failover rather than a 404.
         return new ProviderException(

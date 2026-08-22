@@ -1,9 +1,11 @@
 package com.singapore.weather.config;
 
+import com.singapore.weather.domain.AuthenticationFailedException;
 import com.singapore.weather.domain.CityNotFoundException;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
+import io.github.resilience4j.micrometer.tagged.TaggedRetryMetrics;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -39,8 +41,13 @@ public class ResilienceConfig {
         return RetryRegistry.of(RetryConfig.custom()
                 .maxAttempts(r.retryMaxAttempts())
                 .waitDuration(r.retryWaitDuration())
-                // Retrying will not teach a provider a city it has never heard of.
-                .ignoreExceptions(CityNotFoundException.class)
+                // Retrying will not teach a provider a city it has never heard of, nor
+                // will it fix a bad API key — both fail the same way every time, so
+                // retrying only doubles latency before failover. Note that
+                // AuthenticationFailedException is intentionally NOT ignored on the
+                // circuit breaker: an unusable provider is genuinely unhealthy and
+                // must still count as a failure there.
+                .ignoreExceptions(CityNotFoundException.class, AuthenticationFailedException.class)
                 .build());
     }
 
@@ -48,6 +55,13 @@ public class ResilienceConfig {
     TaggedCircuitBreakerMetrics circuitBreakerMetrics(CircuitBreakerRegistry registry,
                                                       MeterRegistry meterRegistry) {
         TaggedCircuitBreakerMetrics metrics = TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(registry);
+        metrics.bindTo(meterRegistry);
+        return metrics;
+    }
+
+    @Bean
+    TaggedRetryMetrics retryMetrics(RetryRegistry registry, MeterRegistry meterRegistry) {
+        TaggedRetryMetrics metrics = TaggedRetryMetrics.ofRetryRegistry(registry);
         metrics.bindTo(meterRegistry);
         return metrics;
     }

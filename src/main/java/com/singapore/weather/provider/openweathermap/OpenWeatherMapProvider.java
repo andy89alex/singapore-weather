@@ -1,5 +1,6 @@
 package com.singapore.weather.provider.openweathermap;
 
+import com.singapore.weather.domain.AuthenticationFailedException;
 import com.singapore.weather.domain.CityNotFoundException;
 import com.singapore.weather.domain.ProviderException;
 import com.singapore.weather.domain.Weather;
@@ -51,8 +52,15 @@ public class OpenWeatherMapProvider implements WeatherProvider {
                             (request, clientResponse) -> {
                                 throw new CityNotFoundException(city);
                             })
+                    .onStatus(status -> status.value() == HttpStatus.UNAUTHORIZED.value()
+                                    || status.value() == HttpStatus.FORBIDDEN.value(),
+                            (request, clientResponse) -> {
+                                throw new AuthenticationFailedException(
+                                        "OpenWeatherMap rejected the API key (HTTP " + clientResponse.getStatusCode()
+                                                .value() + ")");
+                            })
                     .body(OpenWeatherMapResponse.class);
-        } catch (CityNotFoundException e) {
+        } catch (CityNotFoundException | AuthenticationFailedException e) {
             throw e;
         } catch (RuntimeException e) {
             throw new ProviderException("OpenWeatherMap call failed: " + e.getMessage(), e);
