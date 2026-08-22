@@ -50,7 +50,7 @@ public class WeatherServiceImpl implements WeatherService {
         // making our own unsynchronised provider call, which would reintroduce the
         // stampede at start-up.
         return cache.tryRefresh(city, coldRefreshWait, () -> refreshUnlessAlreadyFilled(city))
-                .orElseGet(() -> whateverTheWinnerLeft(city));
+                .orElseGet(() -> serveWhatIsCachedAfterTimeout(city));
     }
 
     /** Runs with the lock held, so the caller we waited on may already have filled the cache. */
@@ -63,7 +63,7 @@ public class WeatherServiceImpl implements WeatherService {
     }
 
     /** The wait timed out. Serve whatever landed in the cache meanwhile, or admit defeat. */
-    private WeatherResult whateverTheWinnerLeft(String city) {
+    private WeatherResult serveWhatIsCachedAfterTimeout(String city) {
         return cache.find(city)
                 .map(entry -> cache.isFresh(entry)
                         ? WeatherResult.fresh(entry.weather())

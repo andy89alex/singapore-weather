@@ -91,6 +91,12 @@ class WeatherCacheStampedeTest {
                     return new Weather(30, 21);
                 }));
 
+        // Confirm the waiter has actually parked on tryLock before releasing the
+        // winner. Without this, a late-scheduled waiter thread could find the
+        // winner already gone and the assertion below would pass without ever
+        // exercising the wait-then-acquire path this test is meant to prove.
+        awaitState(waiter, 5, TimeUnit.SECONDS, Thread.State.TIMED_WAITING, Thread.State.WAITING);
+
         releaseWinner.countDown();
         winner.join();
         waiter.join();
@@ -147,5 +153,26 @@ class WeatherCacheStampedeTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * Spins until {@code thread} reports one of {@code expectedStates}, up to
+     * {@code timeout}, instead of assuming scheduling happened fast enough.
+     * Fails loudly rather than hanging if the deadline passes.
+     */
+    private static void awaitState(Thread thread, long timeout, TimeUnit unit, Thread.State... expectedStates) {
+        long deadline = System.nanoTime() + unit.toNanos(timeout);
+        while (System.nanoTime() < deadline) {
+            Thread.State state = thread.getState();
+            for (Thread.State expected : expectedStates) {
+                if (state == expected) {
+                    return;
+                }
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("Thread " + thread.getName() + " did not reach one of "
+                + java.util.Arrays.toString(expectedStates) + " within " + timeout + " " + unit
+                + "; actual state: " + thread.getState());
     }
 }
