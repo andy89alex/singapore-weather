@@ -1253,6 +1253,10 @@ class WeatherCacheStampedeTest {
                     return new Weather(30, 21);
                 }));
 
+        // Gate on the waiter actually blocking on the lock; without it the winner
+        // can finish first and the waiter never exercises the bounded wait.
+        awaitState(waiter, 5, TimeUnit.SECONDS, Thread.State.TIMED_WAITING, Thread.State.WAITING);
+
         releaseWinner.countDown();
         winner.join();
         waiter.join();
@@ -1309,6 +1313,24 @@ class WeatherCacheStampedeTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /** Spins until the thread parks, with a deadline so a regression fails rather than hangs. */
+    private static void awaitState(Thread thread, long timeout, TimeUnit unit,
+                                   Thread.State... expectedStates) {
+        long deadline = System.nanoTime() + unit.toNanos(timeout);
+        while (System.nanoTime() < deadline) {
+            Thread.State state = thread.getState();
+            for (Thread.State expected : expectedStates) {
+                if (state == expected) {
+                    return;
+                }
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("Thread " + thread.getName() + " did not reach one of "
+                + List.of(expectedStates) + " within " + timeout + " " + unit
+                + "; actual state: " + thread.getState());
     }
 }
 ```
@@ -1637,6 +1659,16 @@ class WeatherServiceImplTest {
         AtomicReference<WeatherResult> loserResult = new AtomicReference<>();
         Thread loser = Thread.ofVirtual().start(() -> loserResult.set(service.get("singapore")));
 
+        // Without this gate, the loser's virtual thread might not be scheduled
+        // before we release the holder: the holder would finish, fill the cache,
+        // and the loser would then hit the very first fresh-cache branch in
+        // WeatherServiceImpl.get, short-circuiting before it ever calls
+        // cache.tryRefresh and blocks on the lock. Both assertions below would
+        // still pass in that degenerate run, but the test would no longer be
+        // proving that a cold-cache loser actually waits under contention. Do
+        // not delete this as ceremony — it is what makes the test meaningful.
+        awaitState(loser, 5, TimeUnit.SECONDS, Thread.State.TIMED_WAITING, Thread.State.WAITING);
+
         releaseHolder.countDown();
         holder.join();
         loser.join();
@@ -1653,6 +1685,24 @@ class WeatherServiceImplTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /** Spins until the thread parks, with a deadline so a regression fails rather than hangs. */
+    private static void awaitState(Thread thread, long timeout, TimeUnit unit,
+                                   Thread.State... expectedStates) {
+        long deadline = System.nanoTime() + unit.toNanos(timeout);
+        while (System.nanoTime() < deadline) {
+            Thread.State state = thread.getState();
+            for (Thread.State expected : expectedStates) {
+                if (state == expected) {
+                    return;
+                }
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("Thread " + thread.getName() + " did not reach one of "
+                + List.of(expectedStates) + " within " + timeout + " " + unit
+                + "; actual state: " + thread.getState());
     }
 }
 ```
@@ -1755,7 +1805,7 @@ public class WeatherServiceImpl implements WeatherService {
         // making our own unsynchronised provider call, which would reintroduce the
         // stampede at start-up.
         return cache.tryRefresh(city, coldRefreshWait, () -> refreshUnlessAlreadyFilled(city))
-                .orElseGet(() -> whateverTheWinnerLeft(city));
+                .orElseGet(() -> serveWhatIsCachedAfterTimeout(city));
     }
 
     /** Runs with the lock held, so the caller we waited on may already have filled the cache. */
@@ -1768,7 +1818,7 @@ public class WeatherServiceImpl implements WeatherService {
     }
 
     /** The wait timed out. Serve whatever landed in the cache meanwhile, or admit defeat. */
-    private WeatherResult whateverTheWinnerLeft(String city) {
+    private WeatherResult serveWhatIsCachedAfterTimeout(String city) {
         return cache.find(city)
                 .map(entry -> cache.isFresh(entry)
                         ? WeatherResult.fresh(entry.weather())
