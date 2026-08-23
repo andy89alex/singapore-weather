@@ -1,7 +1,10 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.service;
 
-import com.singapore.weather.cache.CachedWeather;
 import com.singapore.weather.cache.WeatherCache;
+import com.singapore.weather.exception.AllProvidersFailedException;
+import com.singapore.weather.model.CachedWeather;
+import com.singapore.weather.model.Weather;
+import com.singapore.weather.model.WeatherResult;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;

@@ -1,10 +1,10 @@
 package com.singapore.weather.api;
 
-import com.singapore.weather.domain.AllProvidersFailedException;
-import com.singapore.weather.domain.CityNotFoundException;
-import com.singapore.weather.domain.Weather;
-import com.singapore.weather.domain.WeatherResult;
-import com.singapore.weather.domain.WeatherService;
+import com.singapore.weather.exception.AllProvidersFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.model.Weather;
+import com.singapore.weather.model.WeatherResult;
+import com.singapore.weather.service.WeatherService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;

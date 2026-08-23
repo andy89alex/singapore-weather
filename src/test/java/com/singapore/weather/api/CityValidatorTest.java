@@ -1,6 +1,6 @@
 package com.singapore.weather.api;
 
-import com.singapore.weather.domain.InvalidCityException;
+import com.singapore.weather.exception.InvalidCityException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

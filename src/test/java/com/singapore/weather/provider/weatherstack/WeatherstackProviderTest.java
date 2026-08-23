@@ -1,9 +1,9 @@
 package com.singapore.weather.provider.weatherstack;
 
-import com.singapore.weather.domain.AuthenticationFailedException;
-import com.singapore.weather.domain.CityNotFoundException;
-import com.singapore.weather.domain.ProviderException;
-import com.singapore.weather.domain.Weather;
+import com.singapore.weather.exception.AuthenticationFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.exception.ProviderException;
+import com.singapore.weather.model.Weather;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;

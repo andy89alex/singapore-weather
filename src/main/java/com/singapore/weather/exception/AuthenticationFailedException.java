@@ -1,4 +1,4 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.exception;
 
 /**
  * A provider rejected the request because the API key is missing, invalid or

@@ -1,9 +1,9 @@
 package com.singapore.weather.config;
 
 import com.singapore.weather.cache.WeatherCache;
-import com.singapore.weather.domain.ProviderChain;
-import com.singapore.weather.domain.WeatherService;
-import com.singapore.weather.domain.WeatherServiceImpl;
+import com.singapore.weather.service.ProviderChain;
+import com.singapore.weather.service.WeatherService;
+import com.singapore.weather.service.WeatherServiceImpl;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import org.springframework.beans.factory.InitializingBean;

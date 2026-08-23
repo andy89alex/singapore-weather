@@ -1,4 +1,4 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.exception;
 
 /**
  * A provider does not recognise the city. This is a client error, not an

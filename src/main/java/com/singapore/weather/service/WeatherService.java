@@ -1,4 +1,8 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.service;
+
+import com.singapore.weather.exception.AllProvidersFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.model.WeatherResult;
 
 public interface WeatherService {
 

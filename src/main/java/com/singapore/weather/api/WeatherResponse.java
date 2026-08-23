@@ -1,6 +1,6 @@
 package com.singapore.weather.api;
 
-import com.singapore.weather.domain.Weather;
+import com.singapore.weather.model.Weather;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 

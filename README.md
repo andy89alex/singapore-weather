@@ -94,8 +94,10 @@ GET /v1/weather?city=singapore
 | Package | Contents | Responsibility |
 | --- | --- | --- |
 | `api` | `WeatherController`, `WeatherResponse`, `GlobalExceptionHandler`, `CityValidator` | HTTP contract and JSON shape. The only layer that knows about HTTP. |
-| `domain` | `Weather`, `WeatherProvider`, `WeatherService`/`WeatherServiceImpl`, `ProviderChain` | Model and orchestration. Knows nothing about any specific vendor. |
-| `cache` | `WeatherCache`, `CachedWeather` | Soft-TTL / hard-TTL logic and stampede protection. |
+| `model` | `Weather`, `WeatherResult`, `CachedWeather` | Immutable value types shared across layers. |
+| `exception` | `ProviderException`, `CityNotFoundException`, `AuthenticationFailedException`, `AllProvidersFailedException`, `InvalidCityException` | Failure vocabulary shared across layers. |
+| `service` | `WeatherService`/`WeatherServiceImpl`, `ProviderChain`, `WeatherProvider` | Orchestration. Knows nothing about any specific vendor. |
+| `cache` | `WeatherCache` | Soft-TTL / hard-TTL logic and stampede protection. |
 | `provider.weatherstack` | `WeatherstackProvider` and its response DTOs | Vendor detail, fully isolated. |
 | `provider.openweathermap` | `OpenWeatherMapProvider` and its response DTOs | Vendor detail, fully isolated. |
 | `config` | `WeatherProperties`, `ProviderConfig`, `ResilienceConfig`, `RestClientConfig`, `CacheConfig` | Timeouts, base URLs, credentials, wiring of resilience components. |
@@ -212,7 +214,7 @@ environment, since those are the only values that must never be committed.
 No test calls `Thread.sleep` and no test reaches the real internet — cache timing is tested
 by advancing an injected `Clock`, and all provider HTTP calls are stubbed with WireMock.
 
-- **Unit tests** (`cache`, `domain`, `config`, `api` packages) — cache freshness and TTL
+- **Unit tests** (`cache`, `model`, `service`, `config`, `api` packages) — cache freshness and TTL
   boundaries at the millisecond level via `MutableClock`, stampede protection under 200
   concurrent threads producing exactly one provider call, provider-chain failover and
   priority ordering, city validation rules, and configuration property binding.

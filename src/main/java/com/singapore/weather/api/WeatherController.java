@@ -1,7 +1,7 @@
 package com.singapore.weather.api;
 
-import com.singapore.weather.domain.WeatherResult;
-import com.singapore.weather.domain.WeatherService;
+import com.singapore.weather.model.WeatherResult;
+import com.singapore.weather.service.WeatherService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;

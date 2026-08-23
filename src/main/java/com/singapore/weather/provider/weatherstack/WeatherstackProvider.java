@@ -1,10 +1,10 @@
 package com.singapore.weather.provider.weatherstack;
 
-import com.singapore.weather.domain.AuthenticationFailedException;
-import com.singapore.weather.domain.CityNotFoundException;
-import com.singapore.weather.domain.ProviderException;
-import com.singapore.weather.domain.Weather;
-import com.singapore.weather.domain.WeatherProvider;
+import com.singapore.weather.exception.AuthenticationFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.exception.ProviderException;
+import com.singapore.weather.model.Weather;
+import com.singapore.weather.service.WeatherProvider;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 

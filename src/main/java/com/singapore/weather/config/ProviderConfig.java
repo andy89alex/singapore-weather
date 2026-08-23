@@ -1,7 +1,7 @@
 package com.singapore.weather.config;
 
-import com.singapore.weather.domain.ProviderChain;
-import com.singapore.weather.domain.WeatherProvider;
+import com.singapore.weather.service.ProviderChain;
+import com.singapore.weather.service.WeatherProvider;
 import com.singapore.weather.provider.openweathermap.OpenWeatherMapProvider;
 import com.singapore.weather.provider.weatherstack.WeatherstackProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;

@@ -1,4 +1,8 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.service;
+
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.exception.ProviderException;
+import com.singapore.weather.model.Weather;
 
 /**
  * One weather vendor. Implementations translate their vendor's failure
