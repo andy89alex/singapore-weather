@@ -172,7 +172,10 @@ without knowing how many there are, so a third provider participates in failover
   cold-start callers received a 503 several seconds before a healthy provider answered.
 - **Circuit breakers per provider.** Each provider has its own Resilience4j
   `CircuitBreaker` (sliding window 10 calls, 50% failure threshold, 10s open-state wait, 3
-  trial calls in half-open) plus a retry policy (2 attempts, 100ms wait) for transient
+  trial calls in half-open). The window and the evaluation gate are separate settings: the
+  breaker ignores the failure rate entirely until `minimum-number-of-calls` have been
+  recorded, so one unlucky call cannot trip a healthy provider. Lower that value to react
+  sooner on low traffic, at the cost of tripping more easily on a brief blip plus a retry policy (2 attempts, 100ms wait) for transient
   failures. Once a circuit opens, that provider is skipped entirely — no timeout is paid —
   which is what keeps failover fast rather than merely eventual.
 - **A failed refresh is not repeated by everyone waiting on it.** If the caller holding a
@@ -208,6 +211,7 @@ without knowing how many there are, so a third provider participates in failover
 | `weather.cache.max-size` | `1000` | — |
 | `weather.cache.cold-refresh-wait` | `9s` | — |
 | `weather.resilience.sliding-window-size` | `10` | — |
+| `weather.resilience.minimum-number-of-calls` | `10` | — |
 | `weather.resilience.failure-rate-threshold` | `50` | — |
 | `weather.resilience.wait-duration-in-open-state` | `10s` | — |
 | `weather.resilience.permitted-calls-in-half-open-state` | `3` | — |
@@ -257,7 +261,7 @@ by advancing an injected `Clock`, and all provider HTTP calls are stubbed with W
 - **Contract tests** (`WeatherControllerTest`) — MockMvc assertions in STRICT JSON compare
   mode, so a stray third field in the response would fail the build.
 
-The suite is 80 tests and runs in a few seconds.
+The suite is 81 tests and runs in a few seconds.
 
 The service has also been run against the real Weatherstack and OpenWeatherMap APIs. That
 run is what caught the Weatherstack status-code defect described above — every stubbed test

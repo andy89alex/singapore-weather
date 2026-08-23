@@ -29,6 +29,7 @@ public record WeatherProperties(@Valid Cache cache, @Valid Resilience resilience
 
     public record Resilience(
             @Positive int slidingWindowSize,
+            @Positive int minimumNumberOfCalls,
             @DecimalMin("1") @DecimalMax("100") float failureRateThreshold,
             @NotNull Duration waitDurationInOpenState,
             @Positive int permittedCallsInHalfOpenState,

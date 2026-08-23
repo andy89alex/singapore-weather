@@ -38,6 +38,7 @@ class WeatherPropertiesTest {
     @Test
     void bindsResilienceDefaults() {
         assertThat(properties.resilience().slidingWindowSize()).isEqualTo(10);
+        assertThat(properties.resilience().minimumNumberOfCalls()).isEqualTo(10);
         assertThat(properties.resilience().failureRateThreshold()).isEqualTo(50.0f);
         assertThat(properties.resilience().retryMaxAttempts()).isEqualTo(2);
         assertThat(properties.resilience().chainDeadline()).isEqualTo(Duration.ofMillis(8500));

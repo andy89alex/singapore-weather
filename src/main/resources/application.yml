@@ -46,6 +46,20 @@ weather:
     cold-refresh-wait: 9s
   resilience:
     sliding-window-size: 10
+    # How many calls the breaker must have seen before it evaluates the failure
+    # rate at all. Below this it stays CLOSED no matter how many failed — which
+    # stops one unlucky call from tripping a healthy provider.
+    #
+    # Resilience4j's own default is 100 for this *and* for sliding-window-size;
+    # they are independent settings that merely share a default. For a
+    # COUNT_BASED window the effective value is capped at the window size, so
+    # setting it above 10 here would silently do nothing — but a TIME_BASED
+    # window applies it literally, which is why it is stated rather than left
+    # to the default.
+    #
+    # Lower it to make the breaker react sooner on low traffic, at the cost of
+    # tripping more easily on a brief blip.
+    minimum-number-of-calls: 10
     failure-rate-threshold: 50
     wait-duration-in-open-state: 10s
     permitted-calls-in-half-open-state: 3
