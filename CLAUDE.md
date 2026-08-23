@@ -15,7 +15,7 @@ caching, or the response shape — most non-obvious decisions are argued there.
 ## Commands
 
 ```bash
-./mvnw clean verify                 # full build + all tests (75), produces the jar
+./mvnw clean verify                 # full build + all tests (78), produces the jar
 ./mvnw test                         # tests only
 ./mvnw spring-boot:run              # run locally on :8080
 
