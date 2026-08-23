@@ -63,6 +63,9 @@ should fail at boot, not at the first request.
 
 ## Architecture
 
+The reasoning behind these choices — the alternatives weighed and why each was rejected — is
+in [`docs/DESIGN.md`](docs/DESIGN.md).
+
 ```
 GET /v1/weather?city=singapore
         |
@@ -78,8 +81,9 @@ GET /v1/weather?city=singapore
         | no                     |
         v                        |
  Provider chain -----------------+ store result
-   1. WeatherstackProvider   [CircuitBreaker + Timeout + Retry]
-   2. OpenWeatherMapProvider [CircuitBreaker + Timeout + Retry]
+   1. WeatherstackProvider   [CircuitBreaker + Retry]
+   2. OpenWeatherMapProvider [CircuitBreaker + Retry]
+   (socket timeouts per provider; a chain-wide deadline bounds the whole loop)
         |
         +-- any success --> normalise units --> cache.put --> FRESH
         |
@@ -102,7 +106,9 @@ cache exists. The controller doesn't know failover exists. Each layer is testabl
 
 ## Adding a new provider
 
-No file outside the four listed below needs to change.
+Adding a provider touches one new package and three existing files: `application.yml`,
+`WeatherProperties.Providers`, and `ProviderConfig`. Nothing else — not `ProviderChain`, not
+`WeatherServiceImpl`, not the controller, not the cache.
 
 1. Implement `WeatherProvider` in a new package `provider.<vendor>` — a `name()`, a
    `priority()` (lower runs first), and `fetch(String city)` that returns a `Weather` or
@@ -139,8 +145,17 @@ without knowing how many there are, so a third provider participates in failover
   refreshes; losers with a stale value in hand are served it immediately rather than queuing
   — they're actually answered faster than the winner. A loser with nothing cached (a cold
   city, or the first moments after startup) waits up to `weather.cache.cold-refresh-wait`
-  (default 3s) for the lock and re-checks the cache before ever calling a provider itself,
-  so a cold start doesn't turn into one upstream call per concurrent request.
+  (9s) for the lock and re-checks the cache before ever calling a provider itself, so a cold
+  start doesn't turn into one upstream call per concurrent request.
+- **Where the 9 seconds comes from.** That wait has to cover the lock winner's real worst
+  case, which is the whole chain rather than one call: per attempt `connect 1s + read 1s =
+  2s`; per provider `2 attempts x 2s + one 100ms retry wait = 4.1s`; two providers = **8.2s**.
+  `weather.resilience.chain-deadline` is set just above that at 8.5s and is enforced inside
+  `ProviderChain` — before starting another provider it checks whether the budget is spent —
+  so no request runs appreciably longer even if more providers are added. `cold-refresh-wait`
+  is then 9s so a waiting caller never gives up *before* the winner could still succeed.
+  Earlier these two numbers were picked independently, and the mismatch meant concurrent
+  cold-start callers received a 503 several seconds before a healthy provider answered.
 - **Circuit breakers per provider.** Each provider has its own Resilience4j
   `CircuitBreaker` (sliding window 10 calls, 50% failure threshold, 10s open-state wait, 3
   trial calls in half-open) plus a retry policy (2 attempts, 100ms wait) for transient
@@ -151,6 +166,11 @@ without knowing how many there are, so a third provider participates in failover
   retried. Without that exclusion, a client hammering the endpoint with made-up city names
   could open the circuit on an otherwise-healthy provider — bad input turning into a
   self-inflicted outage.
+- **Authentication failures are not retried either.** A bad or expired API key surfaces as
+  `AuthenticationFailedException` (Weatherstack error code 101; HTTP 401/403 from
+  OpenWeatherMap). Retrying cannot fix a wrong key — it only doubles the latency paid before
+  failing over — so it is excluded from the retry policy. It *does* still count against the
+  circuit breaker, because a provider we cannot authenticate against is genuinely unusable.
 
 ## Configuration reference
 
@@ -159,23 +179,24 @@ without knowing how many there are, so a third provider participates in failover
 | `weather.cache.fresh-ttl` | `3s` | — |
 | `weather.cache.stale-retention` | `24h` | — |
 | `weather.cache.max-size` | `1000` | — |
-| `weather.cache.cold-refresh-wait` | `3s` | — |
+| `weather.cache.cold-refresh-wait` | `9s` | — |
 | `weather.resilience.sliding-window-size` | `10` | — |
 | `weather.resilience.failure-rate-threshold` | `50` | — |
 | `weather.resilience.wait-duration-in-open-state` | `10s` | — |
 | `weather.resilience.permitted-calls-in-half-open-state` | `3` | — |
 | `weather.resilience.retry-max-attempts` | `2` | — |
 | `weather.resilience.retry-wait-duration` | `100ms` | — |
+| `weather.resilience.chain-deadline` | `8500ms` | — |
 | `weather.providers.weatherstack.priority` | `1` | — |
 | `weather.providers.weatherstack.base-url` | `http://api.weatherstack.com` | — |
 | `weather.providers.weatherstack.api-key` | *(empty — provider disabled)* | `WEATHERSTACK_API_KEY` |
 | `weather.providers.weatherstack.connect-timeout` | `1s` | — |
-| `weather.providers.weatherstack.read-timeout` | `2s` | — |
+| `weather.providers.weatherstack.read-timeout` | `1s` | — |
 | `weather.providers.openweathermap.priority` | `2` | — |
 | `weather.providers.openweathermap.base-url` | `https://api.openweathermap.org` | — |
 | `weather.providers.openweathermap.api-key` | *(empty — provider disabled)* | `OPENWEATHERMAP_API_KEY` |
 | `weather.providers.openweathermap.connect-timeout` | `1s` | — |
-| `weather.providers.openweathermap.read-timeout` | `2s` | — |
+| `weather.providers.openweathermap.read-timeout` | `1s` | — |
 
 None of the numeric/timing properties are wired to an environment variable — override them
 by editing `application.yml` or supplying a `-D`/`SPRING_APPLICATION_JSON` override if you
@@ -209,8 +230,7 @@ by advancing an injected `Clock`, and all provider HTTP calls are stubbed with W
 - **Contract tests** (`WeatherControllerTest`) — MockMvc assertions in STRICT JSON compare
   mode, so a stray third field in the response would fail the build.
 
-The suite is 66 tests, all green as of this task; the exact count as run in this task is in
-the verification output further down.
+The suite is 73 tests and runs in a few seconds.
 
 ## Observability
 
@@ -227,6 +247,7 @@ the verification output further down.
 | --- | --- |
 | In-memory per-instance cache | Fine for one node. Behind a load balancer, each node caches independently and provider calls multiply by node count. Next: Redis as a shared cache with the local cache kept as an L1 layer. |
 | 24-hour stale ceiling | Beyond it, 503. Day-old weather presented as current is worse than admitting ignorance. |
+| A cold-cache caller can wait up to 9s | Only when the cache holds nothing for that city *and* another request is already refreshing it — in practice the first moments after startup, or the first request for a new city. The alternative was letting each caller make its own provider call, which reintroduces the stampede at start-up. Bounding the chain (see Resilience behaviour) is what keeps this figure from being ~12s. With more time I would refresh in the background so the waiting caller is never the slowest one. |
 | Staleness can reach 3s plus one provider round trip | A deliberate consequence of the non-blocking `tryLock`; trades sub-second accuracy for materially better p99 latency. |
 | Values rounded to whole numbers | Makes the response identical across providers so callers cannot infer the source. Sub-degree precision is meaningless for weather. |
 | Wind unified to km/h | Weatherstack's native unit, so the primary path needs no conversion; OpenWeatherMap's m/s is converted in its adapter. |

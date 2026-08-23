@@ -1,7 +1,9 @@
 # Singapore Weather Service — Design
 
 Date: 2026-08-22
-Status: Approved, ready for implementation planning
+
+This document records why the service is built the way it is — the alternatives that were
+weighed and why each was rejected. `README.md` covers what it does and how to run it.
 
 ## 1. Purpose
 
@@ -44,7 +46,7 @@ distributed tracing. Each is recorded in §11 with the reasoning.
 | Choice | Decision | Reasoning |
 | --- | --- | --- |
 | Language / runtime | Java 25 (LTS) | Latest LTS; virtual threads make blocking provider calls cheap. Adoption risk for reviewers is mitigated by a Dockerfile. |
-| Framework | Spring Boot 4.1.1 | Latest stable. Verified booting on Java 25 by a throwaway spike before this plan was written. |
+| Framework | Spring Boot 4.1.1 | Latest stable. Verified compiling, packaging and booting on Java 25 before the stack was committed to. |
 | Build | Maven, with the Maven Wrapper committed | Reviewers run `./mvnw` with nothing installed. |
 | Cache | Caffeine | In-process, high throughput, native support for size bounds and stats. |
 | Resilience | Resilience4j **core modules**, used programmatically | See below — the Spring Boot starter is deliberately not used. |
@@ -64,7 +66,7 @@ therefore risks AOP and auto-configuration breakage for no gain.
 
 The core modules carry no such coupling: `resilience4j-circuitbreaker` depends only on
 `resilience4j-core` and `slf4j-api`. They were verified against Spring Boot 4.1.1 on Java 25
-in a spike before this design was finalised.
+against Spring Boot 4.1.1 on Java 25 before the stack was committed to.
 
 Wiring them by hand costs little here, because `ProviderChain` already invokes providers
 explicitly — there was never a need for AOP to intercept anything. It also makes the
@@ -317,7 +319,9 @@ stampede from the moment of expiry to the moment of start-up rather than elimina
 1,000 rps, the first second after boot would still produce hundreds of identical calls.
 
 So a loser with no fallback waits for the lock with a bounded timeout
-(`weather.cache.cold-refresh-wait`, default 3s — one provider read timeout plus margin).
+(`weather.cache.cold-refresh-wait`, 9s — derived from the chain deadline in §8, not from a
+single provider's timeout; an earlier draft used 3s, which meant waiting callers gave up
+seconds before a healthy provider had answered).
 On acquiring it, it re-checks the cache **before** calling any provider, because the thread
 it was waiting on has almost certainly just filled it. If the wait times out, it re-checks
 once more and serves whatever is there, failing only if there is still nothing.
@@ -378,24 +382,35 @@ weather:
     permitted-calls-in-half-open-state: 3
     retry-max-attempts: 2
     retry-wait-duration: 100ms
+    chain-deadline: 8500ms
 ```
 
-`CircuitBreakerConfig.custom().recordException(...)` is where the §5 rule is enforced:
-`ProviderException` counts as a failure, `CityNotFoundException` does not.
+`ignoreExceptions` is where the §5 rules are enforced. `ProviderException` counts as a
+circuit breaker failure; `CityNotFoundException` counts as neither failure nor success on
+either the breaker or the retry.
 
-Metrics are bound to Micrometer through `TaggedCircuitBreakerMetrics` from
-`resilience4j-micrometer`, which needs no Spring integration module — it takes the registry
-and a `MeterRegistry` directly.
+Metrics are bound to Micrometer through `TaggedCircuitBreakerMetrics` and `TaggedRetryMetrics`
+from `resilience4j-micrometer`, which need no Spring integration module — they take the
+registry and a `MeterRegistry` directly.
 
-HTTP timeouts per provider: connect 1s, read 2s.
+HTTP timeouts per provider: connect 1s, read 1s.
 
-Two rules that are easy to get wrong:
+Three rules that are easy to get wrong:
 
-1. **Retry only transient failures** — timeouts, I/O errors, 5xx. A bad API key (401/403)
-   will not heal on retry; retrying merely doubles latency before failover.
+1. **Retry only transient failures** — timeouts, I/O errors, 5xx. A bad API key will not heal
+   on retry; retrying merely doubles the latency paid before failover. Authentication
+   failures therefore surface as their own type, `AuthenticationFailedException`
+   (Weatherstack error code 101; HTTP 401/403 from OpenWeatherMap), which is excluded from
+   the retry policy but still counts against the circuit breaker — a provider we cannot
+   authenticate against is genuinely unusable.
 2. **An open circuit skips the provider immediately**, with no timeout paid. This is what
    makes failover fast: once Weatherstack is failing, subsequent requests reach
    OpenWeatherMap in microseconds.
+3. **The chain needs its own budget.** Per-provider timeouts bound one call, not the loop:
+   two providers retrying twice each is `2 x (2 x 2s + 0.1s) = 8.2s`. `chain-deadline` caps
+   the whole of `ProviderChain.fetch` at 8.5s, checked before starting each provider, so the
+   figure stays bounded as providers are added. The cold-cache wait in §7 is derived from
+   this number rather than guessed alongside it.
 
 ### Configuration
 
@@ -461,7 +476,8 @@ production code runs unmodified with no test-only branches.
 | **Weatherstack returns `200 OK` with `{"success": false}`** | **throws `ProviderException`, failover triggers** |
 | Weatherstack hangs past the read timeout | throws rather than hanging |
 | Weatherstack returns malformed JSON | throws rather than silently returning null |
-| OpenWeatherMap returns 401 / 429 / 500 | throws `ProviderException`; 401 is not retried |
+| OpenWeatherMap returns 401 / 403 | throws `AuthenticationFailedException`; not retried, but counts against the circuit |
+| OpenWeatherMap returns 429 / 500 | throws `ProviderException` |
 | OpenWeatherMap returns 404 `city not found` | throws `CityNotFoundException`, not `ProviderException` |
 | Weatherstack reports an unresolvable location | throws `CityNotFoundException`; circuit stays CLOSED after repeated occurrences |
 
@@ -528,23 +544,15 @@ compiles and its tests pass.
 | No distributed tracing | Actuator metrics suffice for a single service. OpenTelemetry becomes worthwhile at service number two. |
 | Hand-written striped locks | Five lines, versus pulling in Guava solely for `Striped<Lock>`. |
 
-## 12. Open items for implementation
+## 12. Known limitations
 
-Resolved by a spike on 2026-08-22 (see §3):
-
-- **Spring Boot version — settled at 4.1.1.** Verified compiling, packaging and booting on
-  Java 25.0.4.1 with Actuator reporting UP.
-- **Jackson package names — settled.** Boot 4.1.1 ships Jackson 3 (`tools.jackson.databind`
-  3.1.5) but annotations remain `com.fasterxml.jackson.annotation` (2.21). DTOs use the
-  `com.fasterxml` annotation imports.
-- **Resilience4j integration — settled at core modules used programmatically**, because
-  `resilience4j-spring-boot3` still targets Spring Framework 6.
-
-Still open:
-- Confirm Weatherstack free-tier call limits and the HTTP-only constraint against live
-  documentation, then record the figures in the README.
-- Confirm the exact Weatherstack `error.code` values that indicate an unresolvable location,
-  so §6's mapping to `CityNotFoundException` targets the right codes. Any unrecognised error
-  code defaults to `ProviderException`, which fails safe toward failover.
-- Delete the IntelliJ `Main.java` template and the `.iml` scaffolding when the Maven project
-  structure is created.
+- **Weatherstack free-tier call limits and its HTTP-only constraint** were taken from the
+  vendor's documentation, not measured against a live account. The base URL is `http://`
+  for that reason.
+- **The Weatherstack error codes** mapped to `CityNotFoundException` and
+  `AuthenticationFailedException` are the documented ones. Any unrecognised code falls back
+  to `ProviderException`, which fails safe toward failover rather than toward a 404.
+- **The live provider path has never been exercised.** No real API keys were available while
+  this was built, so both adapters are covered by WireMock-stubbed tests only. The stubs
+  assert query parameter names and values as well as paths, which is the closest available
+  substitute, but a real call could still surface a wire-format detail they do not model.
