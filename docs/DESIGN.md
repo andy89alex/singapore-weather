@@ -406,7 +406,8 @@ class, one registry entry per provider.
 ```yaml
 weather:
   resilience:
-    sliding-window-size: 10
+    sliding-window-size: 10               # how many recent outcomes are remembered
+    minimum-number-of-calls: 10           # how many must be seen before judging at all
     failure-rate-threshold: 50            # percent
     wait-duration-in-open-state: 10s
     permitted-calls-in-half-open-state: 3

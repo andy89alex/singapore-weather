@@ -15,7 +15,7 @@ caching, or the response shape — most non-obvious decisions are argued there.
 ## Commands
 
 ```bash
-./mvnw clean verify                 # full build + all tests (80), produces the jar
+./mvnw clean verify                 # full build + all tests (81), produces the jar
 ./mvnw test                         # tests only
 ./mvnw spring-boot:run              # run locally on :8080
 
@@ -132,6 +132,10 @@ that arithmetic and update all three values together.**
 - Resilience4j is wired **programmatically** in `ResilienceConfig`. Do not add
   `resilience4j-spring-boot3` or `@CircuitBreaker`/`@Retry` annotations — that starter targets
   Spring Framework 6 while Boot 4.1.1 ships Spring Framework 7.
+- `sliding-window-size` and `minimum-number-of-calls` are independent, and both come from
+  configuration. Resilience4j defaults both to 100; for a COUNT_BASED window it caps the
+  minimum at the window size, but a TIME_BASED window applies it literally — so never leave it
+  to the default.
 - Lombok is present for `@Slf4j` only. Value types are records; `@Data` would add setters to
   objects held in the cache.
 - Spring Boot 4.1.1 ships Jackson 3 (`tools.jackson.databind`) but annotations remain

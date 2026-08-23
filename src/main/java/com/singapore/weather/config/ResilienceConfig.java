@@ -25,7 +25,7 @@ public class ResilienceConfig {
         return CircuitBreakerRegistry.of(CircuitBreakerConfig.custom()
                 .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
                 .slidingWindowSize(r.slidingWindowSize())
-                .minimumNumberOfCalls(r.slidingWindowSize())
+                .minimumNumberOfCalls(r.minimumNumberOfCalls())
                 .failureRateThreshold(r.failureRateThreshold())
                 .waitDurationInOpenState(r.waitDurationInOpenState())
                 .permittedNumberOfCallsInHalfOpenState(r.permittedCallsInHalfOpenState())
