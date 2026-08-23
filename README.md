@@ -41,12 +41,23 @@ Then:
 curl "http://localhost:8080/v1/weather?city=singapore"
 ```
 
-**Note on verification:** no real provider API keys exist in the environment this project
-was built in. The provider integrations (`WeatherstackProvider`, `OpenWeatherMapProvider`)
-are exercised against WireMock stubs in the test suite, including the failure and
-unknown-city cases, but the live call to the real Weatherstack/OpenWeatherMap endpoints has
-not been made. If you run this with real keys and something in the wire format has drifted
-since this was written, the WireMock-stubbed test suite is the place to check first.
+### Keeping keys out of the repository
+
+If you would rather not re-export the variables every session, copy the example file and fill
+in your keys:
+
+```bash
+cp src/main/resources/application-local.yml.example \
+   src/main/resources/application-local.yml
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+`application-local.yml` is git-ignored. Environment variables still win over it, so CI and
+container deployments need no file at all.
+
+**Do not put a real key in `application.yml`** — not even as a `${VAR:default}` fallback. That
+default is a literal, and it would be committed. This repository is public, git history is
+permanent, and providers commonly revoke keys that turn up in public scans.
 
 ## Obtaining API keys
 

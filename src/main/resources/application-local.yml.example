@@ -1,0 +1,19 @@
+# Copy this file to application-local.yml (same directory) and fill in real keys.
+#
+#   cp src/main/resources/application-local.yml.example \
+#      src/main/resources/application-local.yml
+#
+# Then run with the local profile:
+#
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+#
+# application-local.yml is git-ignored. This .example file is not — never put a
+# real key in it. Environment variables still work and take precedence, so CI and
+# container deployments need no file at all.
+
+weather:
+  providers:
+    weatherstack:
+      api-key: your_weatherstack_key
+    openweathermap:
+      api-key: your_openweathermap_key

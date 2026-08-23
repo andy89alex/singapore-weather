@@ -7,7 +7,14 @@ target/
 *.iws
 *.ipr
 
+# Local secrets. Spring picks these up with --spring.profiles.active=local;
+# they must never be committed. See application-local.yml.example.
 .env
+application-local.yml
+application-*-local.yml
+src/main/resources/application-local.yml
+src/main/resources/application-*-local.yml
+
 .DS_Store
 *.log
 
