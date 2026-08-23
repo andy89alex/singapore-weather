@@ -94,6 +94,37 @@ class WeatherControllerTest {
     }
 
     @Test
+    void tellsClientsWhenToRetryAndForbidsCachingTheFailure() throws Exception {
+        willThrow(new AllProvidersFailedException("all down"))
+                .given(weatherService).get(eq("singapore"));
+
+        mockMvc.perform(get("/v1/weather"))
+                .andExpect(status().isServiceUnavailable())
+                // Without Retry-After, clients back off on their own schedule and
+                // retry hardest while the providers are down.
+                .andExpect(header().string("Retry-After", "10"))
+                // Without no-store, an intermediary can keep serving this failure
+                // after the service has recovered.
+                .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
+    void forbidsCachingClientErrorsToo() throws Exception {
+        willThrow(new CityNotFoundException("atlantis"))
+                .given(weatherService).get(eq("atlantis"));
+
+        mockMvc.perform(get("/v1/weather").param("city", "atlantis"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().doesNotExist("Retry-After"));
+
+        mockMvc.perform(get("/v1/weather").param("city", "<script>"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().doesNotExist("Retry-After"));
+    }
+
+    @Test
     void reportsTotalOutageWithoutCacheAsServiceUnavailable() throws Exception {
         willThrow(new AllProvidersFailedException("all down"))
                 .given(weatherService).get(eq("singapore"));
