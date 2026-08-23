@@ -72,7 +72,10 @@ public class ProviderChain {
         if (anyProviderAttempted && everyFailureWasCityNotFound) {
             throw new CityNotFoundException(city);
         }
-        throw new AllProvidersFailedException("All providers failed for city: " + city);
+        throw new AllProvidersFailedException(
+                "No weather provider could be reached for '" + city
+                        + "'. This is usually temporary — retry after the interval given in"
+                        + " the Retry-After header.");
     }
 
     private Weather call(WeatherProvider provider, String city) {

@@ -175,6 +175,13 @@ without knowing how many there are, so a third provider participates in failover
   trial calls in half-open) plus a retry policy (2 attempts, 100ms wait) for transient
   failures. Once a circuit opens, that provider is skipped entirely — no timeout is paid —
   which is what keeps failover fast rather than merely eventual.
+- **A failed refresh is not repeated by everyone waiting on it.** If the caller holding a
+  city's lock fails to reach any provider, the callers queued behind it do not each run the
+  same chain in turn. Measured before this was added: five concurrent requests against a cold
+  cache with every provider down finished 2.2s apart — at 2.2s, 4.5s, 6.7s, 8.9s and 11.2s —
+  because each waiter took the lock and repeated a chain that had just failed. They now all
+  finish together at 2.3s, at the cost of a single chain. The marker records the *city*, not
+  just the lock stripe, so one of the 64 stripes being shared cannot make an untried city fail.
 - **Failures tell clients what to do next.** A 503 carries `Retry-After`, set from the
   circuit breaker's open-state wait (10s) because that is genuinely when a provider is next
   attempted — without it clients back off on their own schedule and retry hardest while the
@@ -250,7 +257,7 @@ by advancing an injected `Clock`, and all provider HTTP calls are stubbed with W
 - **Contract tests** (`WeatherControllerTest`) — MockMvc assertions in STRICT JSON compare
   mode, so a stray third field in the response would fail the build.
 
-The suite is 78 tests and runs in a few seconds.
+The suite is 80 tests and runs in a few seconds.
 
 The service has also been run against the real Weatherstack and OpenWeatherMap APIs. That
 run is what caught the Weatherstack status-code defect described above — every stubbed test
@@ -271,7 +278,7 @@ passed while an unknown city was returning 503 instead of 404.
 | --- | --- |
 | In-memory per-instance cache | Fine for one node. Behind a load balancer, each node caches independently and provider calls multiply by node count. Next: Redis as a shared cache with the local cache kept as an L1 layer. |
 | 24-hour stale ceiling | Beyond it, 503. Day-old weather presented as current is worse than admitting ignorance. |
-| A cold-cache caller can wait up to 9s | Only when the cache holds nothing for that city *and* another request is already refreshing it — in practice the first moments after startup, or the first request for a new city. The alternative was letting each caller make its own provider call, which reintroduces the stampede at start-up. Bounding the chain (see Resilience behaviour) is what keeps this figure from being ~12s. With more time I would refresh in the background so the waiting caller is never the slowest one. |
+| A cold-cache caller waits for the in-flight refresh | Only when the cache holds nothing for that city *and* another request is already refreshing it — in practice the first moments after startup, or the first request for a new city. It waits at most `cold-refresh-wait`, and the caller it waits on is itself bounded by `chain-deadline`. The alternative — letting each caller make its own provider call — reintroduces the stampede at start-up. With more time I would refresh in the background so the waiting caller is never the slowest one. |
 | Staleness can reach 3s plus one provider round trip | A deliberate consequence of the non-blocking `tryLock`; trades sub-second accuracy for materially better p99 latency. |
 | Values rounded to whole numbers | Makes the response identical across providers so callers cannot infer the source. Sub-degree precision is meaningless for weather. |
 | Wind unified to km/h | Weatherstack's native unit, so the primary path needs no conversion; OpenWeatherMap's m/s is converted in its adapter. |

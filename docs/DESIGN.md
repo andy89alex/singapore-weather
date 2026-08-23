@@ -339,6 +339,26 @@ once more and serves whatever is there, failing only if there is still nothing.
 The two paths differ because their alternatives differ: a warm loser has something better to
 do than wait, and a cold loser does not.
 
+#### When the caller you waited on failed
+
+Waiting is only half the answer. If the holder fails to reach any provider, the cache is still
+empty when a waiter acquires the lock — and the obvious next step, running the chain itself,
+is wrong: the same chain failed milliseconds ago, and because each waiter takes the lock in
+turn, every caller pays a full chain sequentially.
+
+This was measured rather than reasoned about. Five concurrent requests against a cold cache
+with every provider timing out finished **2.2s apart** — at 2.2s, 4.5s, 6.7s, 8.9s and 11.2s.
+The last figure also exceeds `cold-refresh-wait`, because that bound governs *acquiring* the
+lock, not the request as a whole: the real worst case is the wait plus a chain.
+
+So a failed refresh is recorded per stripe, and a waiter that finds the cache empty gives up
+instead of repeating it. Under the same conditions all five now finish together at 2.3s, at
+the cost of one chain.
+
+The marker records the **city**, not just the stripe. With 64 stripes shared by many cities, a
+marker keyed on the stripe alone would make an untried city fail because an unrelated one had
+just failed on the same lock — trading a latency bug for a correctness bug.
+
 ### Striped locks
 
 A `Map<String, Lock>` keyed by city grows without bound, because `city` is caller-supplied;

@@ -15,7 +15,7 @@ caching, or the response shape — most non-obvious decisions are argued there.
 ## Commands
 
 ```bash
-./mvnw clean verify                 # full build + all tests (78), produces the jar
+./mvnw clean verify                 # full build + all tests (80), produces the jar
 ./mvnw test                         # tests only
 ./mvnw spring-boot:run              # run locally on :8080
 
@@ -108,6 +108,12 @@ Refreshes are arbitrated by 64 striped `ReentrantLock`s (`Math.floorMod(city.has
 immediately; a loser with nothing cached waits up to `cold-refresh-wait` and re-checks the
 cache under the lock before calling a provider. Bypassing that wait reintroduces the stampede
 at start-up.
+
+If the holder failed, waiters must **not** each repeat the chain — that serialises one full
+chain per waiter (measured: five concurrent callers finishing 2.2s apart, the last at 11.2s).
+`WeatherCache` records the last failed refresh per stripe **with the city name**, and
+`refreshUnlessAlreadyFilled` short-circuits on it. The city matters: 64 stripes are shared by
+many cities, and keying on the stripe alone would fail a city nobody ever tried.
 
 Timeouts are a derived budget, not independent numbers: per attempt 2s, per provider 4.1s,
 whole chain 8.2s, so `chain-deadline` is 8.5s and `cold-refresh-wait` 9s. The arithmetic is

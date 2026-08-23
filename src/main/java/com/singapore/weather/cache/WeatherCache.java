@@ -9,7 +9,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Optional;
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -26,6 +28,18 @@ public class WeatherCache {
     private final Clock clock;
     private final Duration freshTtl;
     private final ReentrantLock[] stripes = new ReentrantLock[STRIPES];
+
+    /**
+     * The most recent failed refresh on each stripe. A caller that waited for the
+     * lock and then found the cache empty needs to know whether the holder it
+     * waited on was working on <em>its</em> city and failed, or on a different
+     * city that merely shares the stripe. Without the city recorded here, a
+     * stripe collision would make an untried city fail immediately.
+     */
+    private final AtomicReferenceArray<FailedRefresh> lastFailure = new AtomicReferenceArray<>(STRIPES);
+
+    private record FailedRefresh(String city, Instant at) {
+    }
 
     public WeatherCache(Clock clock, Duration freshTtl, Duration staleRetention, int maxSize) {
         Arrays.setAll(stripes, i -> new ReentrantLock());
@@ -75,6 +89,31 @@ public class WeatherCache {
      * mean either failing a request the providers could answer or making an
      * unsynchronised call that reintroduces the stampede on a cold cache.
      */
+    /** Records that a refresh of this city just failed with nothing to fall back on. */
+    public void recordFailedRefresh(String city) {
+        lastFailure.set(stripeIndex(city), new FailedRefresh(city, clock.instant()));
+    }
+
+    /**
+     * True when a refresh of this exact city failed within {@code within}. Callers
+     * that just waited on the lock use this to avoid repeating a chain that failed
+     * moments ago — which would otherwise serialise one full chain per waiter.
+     */
+    public boolean refreshJustFailed(String city, Duration within) {
+        FailedRefresh failure = lastFailure.get(stripeIndex(city));
+        return failure != null
+                && failure.city().equals(city)
+                && Duration.between(failure.at(), clock.instant()).compareTo(within) <= 0;
+    }
+
+    /** Clears the marker once this city is known good again. */
+    public void clearFailedRefresh(String city) {
+        FailedRefresh failure = lastFailure.get(stripeIndex(city));
+        if (failure != null && failure.city().equals(city)) {
+            lastFailure.compareAndSet(stripeIndex(city), failure, null);
+        }
+    }
+
     public <T> Optional<T> tryRefresh(String city, Duration maxWait, Supplier<T> refresh) {
         ReentrantLock lock = lockFor(city);
         boolean acquired;
@@ -97,6 +136,10 @@ public class WeatherCache {
     }
 
     private ReentrantLock lockFor(String city) {
-        return stripes[Math.floorMod(city.hashCode(), STRIPES)];
+        return stripes[stripeIndex(city)];
+    }
+
+    private static int stripeIndex(String city) {
+        return Math.floorMod(city.hashCode(), STRIPES);
     }
 }
