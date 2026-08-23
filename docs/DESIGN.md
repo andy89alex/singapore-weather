@@ -563,7 +563,12 @@ compiles and its tests pass.
 - **The Weatherstack error codes** mapped to `CityNotFoundException` and
   `AuthenticationFailedException` are the documented ones. Any unrecognised code falls back
   to `ProviderException`, which fails safe toward failover rather than toward a 404.
-- **The live provider path has never been exercised.** No real API keys were available while
-  this was built, so both adapters are covered by WireMock-stubbed tests only. The stubs
-  assert query parameter names and values as well as paths, which is the closest available
-  substitute, but a real call could still surface a wire-format detail they do not model.
+- **The live path has now been exercised**, and it changed the design. Running against real
+  keys showed that Weatherstack answers an unresolvable city with **HTTP 400** rather than the
+  documented 200, which meant the error body was never parsed and an unknown city surfaced as
+  503 instead of 404. Every WireMock test passed throughout, because the stubs modelled the
+  documented behaviour. The adapter now reads the body regardless of status, and regression
+  tests cover the 400 and 401 shapes the live API actually returns.
+- **Weatherstack's free tier rate-limits quickly.** Sustained calls return error 106,
+  which is correctly treated as a provider failure and fails over. A free key therefore sees
+  the primary provider unavailable more often than a paid deployment would.
