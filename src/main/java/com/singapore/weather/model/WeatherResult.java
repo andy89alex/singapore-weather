@@ -1,4 +1,4 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.model;
 
 import java.time.Duration;
 

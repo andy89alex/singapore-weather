@@ -1,4 +1,4 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.exception;
 
 /** Every provider failed. The caller decides whether stale data can be served. */
 public class AllProvidersFailedException extends RuntimeException {

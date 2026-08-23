@@ -1,10 +1,11 @@
 package com.singapore.weather.provider.weatherstack;
 
-import com.singapore.weather.domain.AuthenticationFailedException;
-import com.singapore.weather.domain.CityNotFoundException;
-import com.singapore.weather.domain.ProviderException;
-import com.singapore.weather.domain.Weather;
-import com.singapore.weather.domain.WeatherProvider;
+import com.singapore.weather.exception.AuthenticationFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.exception.ProviderException;
+import com.singapore.weather.model.Weather;
+import com.singapore.weather.service.WeatherProvider;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 
 import java.util.Set;
@@ -63,6 +64,14 @@ public class WeatherstackProvider implements WeatherProvider {
                             .queryParam("query", city)
                             .build())
                     .retrieve()
+                    // Weatherstack's HTTP status is not a reliable failure signal: it
+                    // answers 200 for some errors and 4xx for others (an unresolvable
+                    // city comes back as 400), while the real cause is always the
+                    // `success` flag and `error.code` in the body. Suppressing the
+                    // default status handling lets that body be parsed either way, so
+                    // the mapping below sees error codes instead of a wrapped
+                    // HttpClientErrorException.
+                    .onStatus(HttpStatusCode::isError, (req, res) -> { })
                     .body(WeatherstackResponse.class);
         } catch (RuntimeException e) {
             throw new ProviderException("Weatherstack call failed: " + e.getMessage(), e);

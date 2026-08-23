@@ -1,6 +1,6 @@
 package com.singapore.weather.config;
 
-import com.singapore.weather.domain.WeatherProvider;
+import com.singapore.weather.service.WeatherProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

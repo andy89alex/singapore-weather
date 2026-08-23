@@ -1,4 +1,4 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.model;
 
 /**
  * Provider-agnostic weather reading. Values are unrounded; rounding happens

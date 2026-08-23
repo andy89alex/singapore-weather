@@ -94,8 +94,10 @@ GET /v1/weather?city=singapore
 | Package | Contents | Responsibility |
 | --- | --- | --- |
 | `api` | `WeatherController`, `WeatherResponse`, `GlobalExceptionHandler`, `CityValidator` | HTTP contract and JSON shape. The only layer that knows about HTTP. |
-| `domain` | `Weather`, `WeatherProvider`, `WeatherService`/`WeatherServiceImpl`, `ProviderChain` | Model and orchestration. Knows nothing about any specific vendor. |
-| `cache` | `WeatherCache`, `CachedWeather` | Soft-TTL / hard-TTL logic and stampede protection. |
+| `model` | `Weather`, `WeatherResult`, `CachedWeather` | Immutable value types shared across layers. |
+| `exception` | `ProviderException`, `CityNotFoundException`, `AuthenticationFailedException`, `AllProvidersFailedException`, `InvalidCityException` | Failure vocabulary shared across layers. |
+| `service` | `WeatherService`/`WeatherServiceImpl`, `ProviderChain`, `WeatherProvider` | Orchestration. Knows nothing about any specific vendor. |
+| `cache` | `WeatherCache` | Soft-TTL / hard-TTL logic and stampede protection. |
 | `provider.weatherstack` | `WeatherstackProvider` and its response DTOs | Vendor detail, fully isolated. |
 | `provider.openweathermap` | `OpenWeatherMapProvider` and its response DTOs | Vendor detail, fully isolated. |
 | `config` | `WeatherProperties`, `ProviderConfig`, `ResilienceConfig`, `RestClientConfig`, `CacheConfig` | Timeouts, base URLs, credentials, wiring of resilience components. |
@@ -212,15 +214,15 @@ environment, since those are the only values that must never be committed.
 No test calls `Thread.sleep` and no test reaches the real internet — cache timing is tested
 by advancing an injected `Clock`, and all provider HTTP calls are stubbed with WireMock.
 
-- **Unit tests** (`cache`, `domain`, `config`, `api` packages) — cache freshness and TTL
+- **Unit tests** (`cache`, `model`, `service`, `config`, `api` packages) — cache freshness and TTL
   boundaries at the millisecond level via `MutableClock`, stampede protection under 200
   concurrent threads producing exactly one provider call, provider-chain failover and
   priority ordering, city validation rules, and configuration property binding.
 - **Provider integration tests** (`WeatherstackProviderTest`, `OpenWeatherMapProviderTest`) —
   each provider's `base-url` points at a WireMock instance via `@DynamicPropertySource`, so
-  production code runs unmodified. Covers the normal payload, Weatherstack's `HTTP 200` /
-  `"success": false` failure mode (the single most important test in the project, since
-  trusting HTTP status alone would never trigger failover for Weatherstack), timeouts,
+  production code runs unmodified. Covers the normal payload, Weatherstack's body-based
+  failure reporting on both `HTTP 200` and `HTTP 4xx` (the most important tests in the
+  project — see below), timeouts,
   malformed JSON, and both providers' unknown-city signals.
 - **End-to-end integration tests** (`FailoverIntegrationTest`, `StaleAfterTotalOutageTest`) —
   full Spring context with both providers stubbed. Confirms failover actually reaches
@@ -230,7 +232,11 @@ by advancing an injected `Clock`, and all provider HTTP calls are stubbed with W
 - **Contract tests** (`WeatherControllerTest`) — MockMvc assertions in STRICT JSON compare
   mode, so a stray third field in the response would fail the build.
 
-The suite is 73 tests and runs in a few seconds.
+The suite is 75 tests and runs in a few seconds.
+
+The service has also been run against the real Weatherstack and OpenWeatherMap APIs. That
+run is what caught the Weatherstack status-code defect described above — every stubbed test
+passed while an unknown city was returning 503 instead of 404.
 
 ## Observability
 
@@ -258,6 +264,6 @@ The suite is 73 tests and runs in a few seconds.
 | No auth or rate limiting on our own endpoint | Outside the brief. Production would need an API key or an upstream gateway. |
 | No load testing | Scalability claims rest on design, not measurement. Next: a k6 scenario demonstrating 1,000 rps yields one provider call per 3 seconds. |
 | No distributed tracing | Actuator metrics suffice for a single service; OpenTelemetry becomes worthwhile at service number two. |
-| Live provider path unverified | No real Weatherstack/OpenWeatherMap API keys were available in the environment this was built in. The provider adapters are covered by WireMock-stubbed tests only — a real key exercising the actual endpoint might surface a wire-format detail the stubs don't. |
+| Weatherstack's free tier rate-limits quickly | Verified against the live API: sustained calls return error 106 (`rate_limit_reached`), which is treated as a provider failure and fails over to OpenWeatherMap. On a free key that means the primary provider is unavailable more often than a paid deployment would see. |
 | Docker image build unverified in this environment | Docker is not installed in the environment this was built in, so `docker build` could not actually be run here. The base image tags (`maven:3.9-eclipse-temurin-25`, `eclipse-temurin:25-jre`) were confirmed to exist via the Docker Hub API, and the Dockerfile mirrors the multi-stage layout used successfully during earlier spikes, but the build itself has not been executed end to end. |
 | `X-Weather-Stale` staleness signal lives in a header, not the body | The brief's example payload has exactly two fields and is the kind of thing that gets compared verbatim; a header carries the same signal without risking a mismatch. Adding it to the body later is a one-line change if a caller ever needs it there instead. |

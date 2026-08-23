@@ -1,5 +1,10 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.service;
 
+import com.singapore.weather.exception.AllProvidersFailedException;
+import com.singapore.weather.exception.AuthenticationFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.exception.ProviderException;
+import com.singapore.weather.model.Weather;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;

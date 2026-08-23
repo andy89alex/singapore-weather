@@ -1,16 +1,17 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.service;
 
-import com.singapore.weather.cache.CachedWeather;
 import com.singapore.weather.cache.WeatherCache;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.singapore.weather.exception.AllProvidersFailedException;
+import com.singapore.weather.model.CachedWeather;
+import com.singapore.weather.model.Weather;
+import com.singapore.weather.model.WeatherResult;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.util.Optional;
 
+@Slf4j
 public class WeatherServiceImpl implements WeatherService {
-
-    private static final Logger log = LoggerFactory.getLogger(WeatherServiceImpl.class);
 
     private final WeatherCache cache;
     private final ProviderChain chain;

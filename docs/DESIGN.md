@@ -108,8 +108,10 @@ GET /v1/weather?city=singapore
 | Package | Contents | Responsibility |
 | --- | --- | --- |
 | `api` | `WeatherController`, `WeatherResponse`, `GlobalExceptionHandler` | HTTP contract and JSON shape. The only layer that knows about HTTP. |
-| `domain` | `Weather`, `WeatherProvider`, `WeatherService` (interface), `WeatherServiceImpl` | Model and orchestration. Knows nothing about Weatherstack or OpenWeatherMap. |
-| `cache` | `WeatherCache`, `CachedWeather` | Soft-TTL / hard-TTL logic and stampede protection. Uses an injected `Clock`. |
+| `model` | `Weather`, `WeatherResult`, `CachedWeather` | Immutable value types shared across layers. |
+| `exception` | `ProviderException`, `CityNotFoundException`, `AuthenticationFailedException`, `AllProvidersFailedException`, `InvalidCityException` | Failure vocabulary shared across layers. |
+| `service` | `WeatherProvider`, `WeatherService` (interface), `WeatherServiceImpl`, `ProviderChain` | Orchestration. Knows nothing about Weatherstack or OpenWeatherMap. |
+| `cache` | `WeatherCache` | Soft-TTL / hard-TTL logic and stampede protection. Uses an injected `Clock`. |
 | `provider.weatherstack` | `WeatherstackProvider` and its response DTOs | Vendor detail, fully isolated. |
 | `provider.openweathermap` | `OpenWeatherMapProvider` and its response DTOs | Vendor detail, fully isolated. |
 | `config` | `WeatherProperties`, `RestClientConfig` | Timeouts, base URLs, credentials. |
@@ -222,7 +224,7 @@ cheap to reverse.
 | Endpoint | `/current?access_key=…&query={city}` | `/data/2.5/weather?q={city}&appid=…&units=metric` |
 | Temperature | `current.temperature`, °C with default `units=m` | `main.temp`, Kelvin by default — `units=metric` requested to get °C |
 | Wind | `current.wind_speed`, **km/h** | `wind.speed`, **m/s** |
-| Failure reporting | **HTTP 200 with `{"success": false, "error": {...}}`** | Conventional HTTP status codes |
+| Failure reporting | **`{"success": false, "error": {...}}` in the body; the HTTP status may be 200 *or* 4xx** | Conventional HTTP status codes |
 | Unknown city | Signalled through an `error.code` in the `success: false` body | HTTP 404 with `{"cod": "404", "message": "city not found"}` |
 | Transport | Free tier is HTTP-only | HTTPS |
 
@@ -232,9 +234,17 @@ the whole reason the distinction in §5 survives past the adapter boundary.
 
 ### The Weatherstack success flag
 
-Weatherstack reports errors with HTTP 200 and a `success: false` body. Code that trusts the
-HTTP status alone will never trigger failover and will hand callers a malformed payload
-while every health signal stays green.
+Weatherstack reports errors in the body, through `success: false` and an `error.code`. The
+HTTP status is not a reliable signal in either direction: some failures come back as 200,
+and an unresolvable city comes back as **400** while still carrying code 615 in the body.
+
+Both halves of that matter. Trusting the status to mean success hands callers a malformed
+payload while every health signal stays green. Trusting it to mean failure is what the first
+implementation did — `retrieve()` raised on the 400 before the body was ever inspected, so
+error 615 never reached the mapping and an unknown city surfaced as **503 instead of 404**,
+counting against the circuit breaker on the way. That defect survived every WireMock test,
+because the stubs modelled the documented 200 case; only a call against the live API exposed
+it. The adapter now suppresses default status handling and parses the body either way.
 
 `WeatherstackProvider` therefore inspects the `success` flag and throws `ProviderException`
 when it is false. This is covered by a dedicated WireMock test (§9), because without it the
@@ -474,6 +484,7 @@ production code runs unmodified with no test-only branches.
 | --- | --- |
 | Weatherstack returns a normal payload | parsed correctly, units correct |
 | **Weatherstack returns `200 OK` with `{"success": false}`** | **throws `ProviderException`, failover triggers** |
+| **Weatherstack returns `400` with `{"success": false, "error": {"code": 615}}`** | **throws `CityNotFoundException` — the live API's actual unknown-city response** |
 | Weatherstack hangs past the read timeout | throws rather than hanging |
 | Weatherstack returns malformed JSON | throws rather than silently returning null |
 | OpenWeatherMap returns 401 / 403 | throws `AuthenticationFailedException`; not retried, but counts against the circuit |
@@ -552,7 +563,12 @@ compiles and its tests pass.
 - **The Weatherstack error codes** mapped to `CityNotFoundException` and
   `AuthenticationFailedException` are the documented ones. Any unrecognised code falls back
   to `ProviderException`, which fails safe toward failover rather than toward a 404.
-- **The live provider path has never been exercised.** No real API keys were available while
-  this was built, so both adapters are covered by WireMock-stubbed tests only. The stubs
-  assert query parameter names and values as well as paths, which is the closest available
-  substitute, but a real call could still surface a wire-format detail they do not model.
+- **The live path has now been exercised**, and it changed the design. Running against real
+  keys showed that Weatherstack answers an unresolvable city with **HTTP 400** rather than the
+  documented 200, which meant the error body was never parsed and an unknown city surfaced as
+  503 instead of 404. Every WireMock test passed throughout, because the stubs modelled the
+  documented behaviour. The adapter now reads the body regardless of status, and regression
+  tests cover the 400 and 401 shapes the live API actually returns.
+- **Weatherstack's free tier rate-limits quickly.** Sustained calls return error 106,
+  which is correctly treated as a provider failure and fails over. A free key therefore sees
+  the primary provider unavailable more often than a paid deployment would.

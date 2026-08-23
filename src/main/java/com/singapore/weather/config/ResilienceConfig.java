@@ -1,7 +1,7 @@
 package com.singapore.weather.config;
 
-import com.singapore.weather.domain.AuthenticationFailedException;
-import com.singapore.weather.domain.CityNotFoundException;
+import com.singapore.weather.exception.AuthenticationFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;

@@ -1,6 +1,6 @@
 package com.singapore.weather.health;
 
-import com.singapore.weather.domain.WeatherProvider;
+import com.singapore.weather.service.WeatherProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.boot.health.contributor.Health;

@@ -1,6 +1,4 @@
-package com.singapore.weather.cache;
-
-import com.singapore.weather.domain.Weather;
+package com.singapore.weather.model;
 
 import java.time.Instant;
 

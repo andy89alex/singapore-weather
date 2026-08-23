@@ -1,11 +1,13 @@
-package com.singapore.weather.domain;
+package com.singapore.weather.service;
 
+import com.singapore.weather.exception.AllProvidersFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.model.Weather;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.util.Comparator;
@@ -24,9 +26,8 @@ import java.util.function.Supplier;
  * never interrupted — so a caller is never left waiting for a provider that
  * could not plausibly start and finish within the remaining budget.
  */
+@Slf4j
 public class ProviderChain {
-
-    private static final Logger log = LoggerFactory.getLogger(ProviderChain.class);
 
     private final List<WeatherProvider> providers;
     private final CircuitBreakerRegistry breakers;

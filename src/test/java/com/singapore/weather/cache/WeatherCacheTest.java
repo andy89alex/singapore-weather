@@ -1,6 +1,7 @@
 package com.singapore.weather.cache;
 
-import com.singapore.weather.domain.Weather;
+import com.singapore.weather.model.CachedWeather;
+import com.singapore.weather.model.Weather;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

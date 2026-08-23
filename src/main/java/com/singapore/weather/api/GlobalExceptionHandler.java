@@ -1,8 +1,8 @@
 package com.singapore.weather.api;
 
-import com.singapore.weather.domain.AllProvidersFailedException;
-import com.singapore.weather.domain.CityNotFoundException;
-import com.singapore.weather.domain.InvalidCityException;
+import com.singapore.weather.exception.AllProvidersFailedException;
+import com.singapore.weather.exception.CityNotFoundException;
+import com.singapore.weather.exception.InvalidCityException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
