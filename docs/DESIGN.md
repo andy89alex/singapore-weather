@@ -177,7 +177,7 @@ a weather report.
 | Situation | Status | Body |
 | --- | --- | --- |
 | All providers down, cached value exists | 200 + `X-Weather-Stale: true` and `Age: <seconds>` | Normal payload |
-| All providers down, no cached value ever | 503 | `ProblemDetail` (RFC 7807) |
+| All providers down, no cached value ever | 503 + `Retry-After` and `Cache-Control: no-store` | `ProblemDetail` (RFC 7807) |
 | `city` malformed | 400 | `ProblemDetail` |
 | `city` well-formed but unknown to every provider | 404 | `ProblemDetail` |
 

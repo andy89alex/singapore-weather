@@ -163,6 +163,12 @@ without knowing how many there are, so a third provider participates in failover
   trial calls in half-open) plus a retry policy (2 attempts, 100ms wait) for transient
   failures. Once a circuit opens, that provider is skipped entirely — no timeout is paid —
   which is what keeps failover fast rather than merely eventual.
+- **Failures tell clients what to do next.** A 503 carries `Retry-After`, set from the
+  circuit breaker's open-state wait (10s) because that is genuinely when a provider is next
+  attempted — without it clients back off on their own schedule and retry hardest while the
+  providers are down, which is when this service can least afford the load. Every error
+  response also carries `Cache-Control: no-store`, so an intermediary cannot keep serving a
+  failure after the service has recovered. Successful responses are untouched.
 - **404 does not open the circuit.** A well-formed city that no provider recognises
   (`CityNotFoundException`) is excluded from the circuit breaker's failure count and is never
   retried. Without that exclusion, a client hammering the endpoint with made-up city names
@@ -232,7 +238,7 @@ by advancing an injected `Clock`, and all provider HTTP calls are stubbed with W
 - **Contract tests** (`WeatherControllerTest`) — MockMvc assertions in STRICT JSON compare
   mode, so a stray third field in the response would fail the build.
 
-The suite is 75 tests and runs in a few seconds.
+The suite is 78 tests and runs in a few seconds.
 
 The service has also been run against the real Weatherstack and OpenWeatherMap APIs. That
 run is what caught the Weatherstack status-code defect described above — every stubbed test

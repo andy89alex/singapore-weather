@@ -74,6 +74,10 @@ response looks identical whichever provider answered.
 | `ProviderException` | 503 | counts as failure | yes |
 | `AllProvidersFailedException` | 503 | n/a | n/a |
 
+Every error response carries `Cache-Control: no-store`, and 503 additionally carries
+`Retry-After` sourced from `weather.resilience.wait-duration-in-open-state`. Success responses
+carry neither — don't let them leak onto the 200 path.
+
 Only `InvalidCityException`, `CityNotFoundException` and `AllProvidersFailedException` have
 handlers in `GlobalExceptionHandler`. The provider-level exceptions never reach the API layer:
 `ProviderChain` catches them, tries the next provider, and raises `AllProvidersFailedException`
