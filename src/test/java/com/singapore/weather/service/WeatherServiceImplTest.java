@@ -243,7 +243,9 @@ class WeatherServiceImplTest {
 
         assertThatThrownBy(() -> service.get("singapore"))
                 .isInstanceOf(AllProvidersFailedException.class)
-                .hasMessageContaining("Timed out waiting for an in-flight refresh");
+                // Distinguishes this from "no provider could be reached": an operator
+                // reading logs needs to tell a lost race from a real outage.
+                .hasMessageContaining("already in progress");
 
         releaseHolder.countDown();
         holder.join();
@@ -251,6 +253,76 @@ class WeatherServiceImplTest {
         assertThat(providerCalls)
                 .as("a caller that gave up waiting must not have made its own provider call")
                 .hasValue(0);
+    }
+
+    @Test
+    void concurrentColdCallersDoNotEachRepeatTheFailedChain() throws Exception {
+        // Reproduces a real measurement: five concurrent requests against a cold
+        // cache with every provider down finished 2.2s apart, at 2.2s, 4.5s, 6.7s,
+        // 8.9s and 11.2s, because each waiter took the lock in turn and ran a full
+        // chain that had just failed. Only the first caller may reach the provider.
+        int callers = 5;
+        WeatherServiceImpl service = service(FRESH);
+        providerFailure.set(new ProviderException("down"));
+
+        CountDownLatch startLine = new CountDownLatch(1);
+        CountDownLatch finished = new CountDownLatch(callers);
+        AtomicInteger failures = new AtomicInteger();
+
+        for (int i = 0; i < callers; i++) {
+            Thread.ofVirtual().start(() -> {
+                try {
+                    startLine.await();
+                    service.get("singapore");
+                } catch (AllProvidersFailedException e) {
+                    failures.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    finished.countDown();
+                }
+            });
+        }
+
+        startLine.countDown();
+        assertThat(finished.await(10, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(failures).as("every caller still learns the providers are down").hasValue(callers);
+        assertThat(providerCalls)
+                .as("only the caller holding the lock may contact a provider")
+                .hasValue(1);
+    }
+
+    @Test
+    void aCityShariingAStripeWithAFailedOneIsStillAttempted() throws Exception {
+        // 64 stripes are shared by many cities. The short-circuit above must key on
+        // the city, not the stripe, or a collision would fail an untried city.
+        String colliding = cityCollidingWith("singapore");
+        WeatherServiceImpl service = service(FRESH);
+
+        providerFailure.set(new ProviderException("down"));
+        assertThatThrownBy(() -> service.get("singapore"))
+                .isInstanceOf(AllProvidersFailedException.class);
+
+        int callsBefore = providerCalls.get();
+        providerFailure.set(null);
+
+        assertThat(service.get(colliding).weather()).isEqualTo(FRESH);
+        assertThat(providerCalls)
+                .as("the colliding city must still reach a provider")
+                .hasValue(callsBefore + 1);
+    }
+
+    /** Brute-forces a city name landing on the same lock stripe as the given one. */
+    private static String cityCollidingWith(String city) {
+        int target = Math.floorMod(city.hashCode(), 64);
+        for (int i = 0; i < 500_000; i++) {
+            String candidate = "city" + i;
+            if (Math.floorMod(candidate.hashCode(), 64) == target && !candidate.equals(city)) {
+                return candidate;
+            }
+        }
+        throw new AssertionError("no colliding city name found");
     }
 
     private static void awaitQuietly(CountDownLatch latch) {
