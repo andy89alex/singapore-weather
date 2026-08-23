@@ -218,9 +218,9 @@ by advancing an injected `Clock`, and all provider HTTP calls are stubbed with W
   priority ordering, city validation rules, and configuration property binding.
 - **Provider integration tests** (`WeatherstackProviderTest`, `OpenWeatherMapProviderTest`) —
   each provider's `base-url` points at a WireMock instance via `@DynamicPropertySource`, so
-  production code runs unmodified. Covers the normal payload, Weatherstack's `HTTP 200` /
-  `"success": false` failure mode (the single most important test in the project, since
-  trusting HTTP status alone would never trigger failover for Weatherstack), timeouts,
+  production code runs unmodified. Covers the normal payload, Weatherstack's body-based
+  failure reporting on both `HTTP 200` and `HTTP 4xx` (the most important tests in the
+  project — see below), timeouts,
   malformed JSON, and both providers' unknown-city signals.
 - **End-to-end integration tests** (`FailoverIntegrationTest`, `StaleAfterTotalOutageTest`) —
   full Spring context with both providers stubbed. Confirms failover actually reaches

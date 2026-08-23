@@ -101,6 +101,32 @@ class WeatherstackProviderTest {
     }
 
     @Test
+    void mapsTheUnresolvableLocationCodeToCityNotFoundEvenOnHttp400() {
+        // The live API returns 400 — not 200 — for an unresolvable city, while still
+        // reporting the real cause as error code 615 in the body. Trusting the status
+        // here made the chain raise ProviderException, so a bad city name surfaced as
+        // 503 instead of 404 and counted against the circuit breaker.
+        stub(400, """
+                {"success":false,"error":{"code":615,"type":"request_failed",
+                 "info":"Your API request failed. Please try again or contact support."}}
+                """);
+
+        assertThatThrownBy(() -> provider().fetch("atlantisxyz"))
+                .isInstanceOf(CityNotFoundException.class);
+    }
+
+    @Test
+    void mapsTheAuthenticationCodeToAuthenticationFailureEvenOnHttp401() {
+        stub(401, """
+                {"success":false,"error":{"code":101,"type":"invalid_access_key",
+                 "info":"You have not supplied a valid API Access Key."}}
+                """);
+
+        assertThatThrownBy(() -> provider().fetch("singapore"))
+                .isInstanceOf(AuthenticationFailedException.class);
+    }
+
+    @Test
     void treatsAMissingCurrentBlockAsAFailure() {
         stub(200, """
                 {"request":{"query":"Singapore"}}
