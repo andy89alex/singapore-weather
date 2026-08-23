@@ -16,3 +16,44 @@ jobs:
           java-version: '25'
           cache: maven
       - run: ./mvnw -B verify
+
+  docker:
+    # The README offers Docker as the way to run this without installing JDK 25,
+    # so the image has to actually work. Runs on amd64 here, which is what a
+    # reviewer is most likely to use.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t singapore-weather .
+
+      - name: Start the container
+        # Dummy keys: they are never used before a weather request, and the
+        # service deliberately refuses to start with no provider configured.
+        run: |
+          docker run -d --name weather -p 8080:8080 \
+            -e WEATHERSTACK_API_KEY=ci-dummy \
+            -e OPENWEATHERMAP_API_KEY=ci-dummy \
+            singapore-weather
+
+      - name: Wait for it to report healthy
+        # Proves the ENTRYPOINT runs and the app boots on the JRE-only second
+        # stage — neither of which `docker build` alone exercises. No provider
+        # is contacted: the health endpoint only reports circuit state.
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:8080/actuator/health | tee /dev/stderr | grep -q '"status":"UP"'
+
+      - name: Container logs
+        if: always()
+        run: docker logs weather
+
+      - name: Stop the container
+        if: always()
+        run: docker rm -f weather
