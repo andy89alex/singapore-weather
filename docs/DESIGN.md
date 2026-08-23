@@ -459,6 +459,10 @@ call counts. Every failover and every stale response is logged at WARN.
 A multi-stage `Dockerfile` is included. It makes the build-and-run instructions work on
 machines without JDK 25, which removes the only practical risk of that choice.
 
+That only holds if the image actually works, so CI builds it, starts it, and waits for
+`/actuator/health` on every push. `docker build` alone would not be enough: it never runs the
+`ENTRYPOINT`, so it cannot show that the application boots on the JRE-only second stage.
+
 ## 9. Testing strategy
 
 No test sleeps and no test touches the real internet.

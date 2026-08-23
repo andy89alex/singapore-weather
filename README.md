@@ -25,7 +25,8 @@ export OPENWEATHERMAP_API_KEY=...
 ./mvnw spring-boot:run
 ```
 
-Or with Docker:
+Or with Docker — built and smoke-tested on every push by CI, which starts the image and waits
+for it to report healthy, so the `ENTRYPOINT` and the JRE-only runtime stage are both exercised:
 
 ```bash
 docker build -t singapore-weather .
@@ -282,5 +283,4 @@ passed while an unknown city was returning 503 instead of 404.
 | No load testing | Scalability claims rest on design, not measurement. Next: a k6 scenario demonstrating 1,000 rps yields one provider call per 3 seconds. |
 | No distributed tracing | Actuator metrics suffice for a single service; OpenTelemetry becomes worthwhile at service number two. |
 | Weatherstack's free tier rate-limits quickly | Verified against the live API: sustained calls return error 106 (`rate_limit_reached`), which is treated as a provider failure and fails over to OpenWeatherMap. On a free key that means the primary provider is unavailable more often than a paid deployment would see. |
-| Docker image build unverified in this environment | Docker is not installed in the environment this was built in, so `docker build` could not actually be run here. The base image tags (`maven:3.9-eclipse-temurin-25`, `eclipse-temurin:25-jre`) were confirmed to exist via the Docker Hub API, and the jar the second stage copies is the one `./mvnw clean verify` produces and that was run directly, but no stage of the Dockerfile has itself been executed. |
 | `X-Weather-Stale` staleness signal lives in a header, not the body | The brief's example payload has exactly two fields and is the kind of thing that gets compared verbatim; a header carries the same signal without risking a mismatch. Adding it to the body later is a one-line change if a caller ever needs it there instead. |
